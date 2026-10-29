@@ -30,7 +30,10 @@ class AngelLiveFeed:
             api=os.environ["ANGEL_API_KEY"].strip(); client=os.environ["ANGEL_CLIENT_CODE"].strip()
             smart=SmartConnect(api_key=api)
             auth=smart.generateSession(client,os.environ["ANGEL_PIN"].strip(),pyotp.TOTP(os.environ["ANGEL_TOTP_KEY"].strip()).now())
-            if not isinstance(auth,dict) or not auth.get("status"): raise RuntimeError("Angel One login failed; check credentials/TOTP")
+            if not isinstance(auth, dict) or not auth.get("status"):
+                self.status = "auth_failed"
+                self.error = auth.get("message", "Auth failed") if isinstance(auth, dict) else "Auth error"
+                return
             data=auth.get("data") or {}; jwt=data.get("jwtToken"); feed=data.get("feedToken") or smart.getfeedToken()
             if not jwt or not feed: raise RuntimeError("Login response lacks feed tokens")
             res=requests.get(MASTER_URL,timeout=25); res.raise_for_status(); master=res.json()

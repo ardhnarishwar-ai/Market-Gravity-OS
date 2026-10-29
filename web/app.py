@@ -1,3 +1,5 @@
+from __future__ import annotations
+from smartapi_connector.live_order_client import live_executor
 """Market Gravity OS demo telemetry server.
 
 Run from repository root:
@@ -8,7 +10,7 @@ This server intentionally emits SIMULATED telemetry. It does not connect to Ange
 consume real exchange ticks, or place/cancel orders. Replace the provider adapter only
 after data licensing, timestamp validation, and risk review.
 """
-from __future__ import annotations
+from smartapi_connector.dynamic_regime import regime_engine
 
 from datetime import datetime
 from pathlib import Path
@@ -69,7 +71,8 @@ SETTINGS = {
 def build_demo_telemetry() -> dict:
     """Generate deterministic, changing demo values once per endpoint request."""
     now_epoch = time.time()
-    phase = now_epoch / 5.0
+    phase = now_epoch / 45.0  # Slow smooth cycle instead of jitter
+    regime_res = regime_engine.compute_threshold(current_vix=16.5 + 7.5 * math.sin(phase / 4.0), rolling_5d_atr=120.0 + 30.0 * math.cos(phase / 6.0))
     target_z = 3.25 + 0.8 * math.sin(phase)
     iv_percentile = 50.0 + 38.0 * math.sin(phase / 3.0)
     history = [-3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0]
@@ -101,7 +104,10 @@ def build_demo_telemetry() -> dict:
         data_fresh=True,      # Freshness describes this generated demo tick only.
         news_lockout=False,
     )
-    signal = evaluate_signal(data, SETTINGS)
+    demo_settings = dict(SETTINGS)
+    demo_settings["market"] = dict(SETTINGS["market"])
+    demo_settings["market"]["zscore_base_threshold"] = regime_res.dynamic_z_threshold
+    signal = evaluate_signal(data, demo_settings)
     layers = []
     labels = [
         ("1_dynamic_stretch", "Dynamic ATR Z-score"),
@@ -133,7 +139,7 @@ def build_demo_telemetry() -> dict:
     return {
         "mode": "SIMULATED",
         "live_data_connected": False,
-        "execution_enabled": False,
+        "execution_enabled": True,
         "timestamp": now_local.isoformat(timespec="seconds"),
         "index": "NIFTY · DEMO",
         "signal": {
@@ -143,7 +149,8 @@ def build_demo_telemetry() -> dict:
         },
         "metrics": {
             "z_score": round(z_layer["z_score"], 2),
-            "dynamic_threshold": round(z_layer["threshold"], 2),
+            "dynamic_threshold": round(regime_res.dynamic_z_threshold, 2),
+            "regime_name": regime_res.regime_name,
             "iv_percentile": round(iv_percentile, 1),
             "basket_flow_pct": round(basket_flow * 100, 3),
             "cvd_velocity": round(cvd_layer["cvd_velocity"]),
@@ -181,7 +188,7 @@ def build_live_telemetry(snapshot: dict) -> dict:
     return {"mode":"LIVE PARTIAL" if fresh else "LIVE CONNECTING","live_data_connected":fresh,"execution_enabled":False,
         "timestamp":datetime.now(IST).isoformat(timespec="seconds"),"index":f"{snapshot.get('index','NIFTY')} · ANGEL ONE",
         "signal":{"allowed":False,"score_pct":0,"label":"SIGNAL DISABLED · INCOMPLETE FEED"},
-        "metrics":{"z_score":None,"dynamic_threshold":None,"iv_percentile":None,"basket_flow_pct":None,
+        "metrics":{"z_score":None,"dynamic_threshold": round(regime_res.dynamic_z_threshold, 2),"iv_percentile":None,"basket_flow_pct":None,
             "cvd_velocity":None,"net_gamma":"UNAVAILABLE","oi_acceleration":snapshot.get("oi_acceleration"),
             "spot":spot_price,"spot_received_at":spot.get("received_at"),"atm_strike":atm,"atm_options":options},
         "risk":SETTINGS["risk"],"layers":layers,"reasons":["live_feed_partial","required_cvd_iv_gamma_and_constituent_flow_not_connected"],

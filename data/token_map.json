@@ -1,0 +1,191 @@
+{
+  "spot": {
+    "symbol": "Nifty 50",
+    "token": "99926000",
+    "exch_seg": "NSE"
+  },
+  "futures": {
+    "symbol": "NIFTY23NOV26FUT",
+    "token": "61471",
+    "expiry": "23NOV2026",
+    "lotsize": "65"
+  },
+  "options": {
+    "24400_PE": {
+      "symbol": "NIFTY03NOV2624400PE",
+      "token": "54129",
+      "strike": 24400.0,
+      "option_type": "PE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    },
+    "24350_PE": {
+      "symbol": "NIFTY03NOV2624350PE",
+      "token": "54127",
+      "strike": 24350.0,
+      "option_type": "PE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    },
+    "24650_PE": {
+      "symbol": "NIFTY03NOV2624650PE",
+      "token": "54253",
+      "strike": 24650.0,
+      "option_type": "PE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    },
+    "24300_PE": {
+      "symbol": "NIFTY03NOV2624300PE",
+      "token": "54125",
+      "strike": 24300.0,
+      "option_type": "PE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    },
+    "24450_CE": {
+      "symbol": "NIFTY03NOV2624450CE",
+      "token": "54134",
+      "strike": 24450.0,
+      "option_type": "CE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    },
+    "24500_CE": {
+      "symbol": "NIFTY03NOV2624500CE",
+      "token": "54136",
+      "strike": 24500.0,
+      "option_type": "CE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    },
+    "24600_PE": {
+      "symbol": "NIFTY03NOV2624600PE",
+      "token": "54239",
+      "strike": 24600.0,
+      "option_type": "PE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    },
+    "24400_CE": {
+      "symbol": "NIFTY03NOV2624400CE",
+      "token": "54128",
+      "strike": 24400.0,
+      "option_type": "CE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    },
+    "24700_CE": {
+      "symbol": "NIFTY03NOV2624700CE",
+      "token": "54254",
+      "strike": 24700.0,
+      "option_type": "CE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    },
+    "24450_PE": {
+      "symbol": "NIFTY03NOV2624450PE",
+      "token": "54135",
+      "strike": 24450.0,
+      "option_type": "PE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    },
+    "24250_CE": {
+      "symbol": "NIFTY03NOV2624250CE",
+      "token": "54122",
+      "strike": 24250.0,
+      "option_type": "CE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    },
+    "24250_PE": {
+      "symbol": "NIFTY03NOV2624250PE",
+      "token": "54123",
+      "strike": 24250.0,
+      "option_type": "PE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    },
+    "24550_CE": {
+      "symbol": "NIFTY03NOV2624550CE",
+      "token": "54182",
+      "strike": 24550.0,
+      "option_type": "CE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    },
+    "24350_CE": {
+      "symbol": "NIFTY03NOV2624350CE",
+      "token": "54126",
+      "strike": 24350.0,
+      "option_type": "CE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    },
+    "24650_CE": {
+      "symbol": "NIFTY03NOV2624650CE",
+      "token": "54240",
+      "strike": 24650.0,
+      "option_type": "CE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    },
+    "24750_PE": {
+      "symbol": "NIFTY03NOV2624750PE",
+      "token": "54267",
+      "strike": 24750.0,
+      "option_type": "PE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    },
+    "24300_CE": {
+      "symbol": "NIFTY03NOV2624300CE",
+      "token": "54124",
+      "strike": 24300.0,
+      "option_type": "CE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    },
+    "24500_PE": {
+      "symbol": "NIFTY03NOV2624500PE",
+      "token": "54177",
+      "strike": 24500.0,
+      "option_type": "PE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    },
+    "24550_PE": {
+      "symbol": "NIFTY03NOV2624550PE",
+      "token": "54193",
+      "strike": 24550.0,
+      "option_type": "PE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    },
+    "24600_CE": {
+      "symbol": "NIFTY03NOV2624600CE",
+      "token": "54194",
+      "strike": 24600.0,
+      "option_type": "CE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    },
+    "24700_PE": {
+      "symbol": "NIFTY03NOV2624700PE",
+      "token": "54261",
+      "strike": 24700.0,
+      "option_type": "PE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    },
+    "24750_CE": {
+      "symbol": "NIFTY03NOV2624750CE",
+      "token": "54262",
+      "strike": 24750.0,
+      "option_type": "CE",
+      "expiry": "03NOV2026",
+      "lotsize": "65"
+    }
+  }
+}
