@@ -4,10 +4,10 @@
     "as_of": "2026-10-29",
     "description": "Percentages are index weights for the seven requested constituents, not their own free-float shares. Index weights use free-float methodology. The engine normalizes only these seven selected constituents to calculate a partial-basket flow; they do not sum to 100% of either full index.",
     "nifty_source": "https://www.arihantcapital.com/index-constituents",
-    "sensex_source": "https://www.anandrathi.com/indices/bse-sensex",
+    "sensex_source": "https://www.kksecurities.com/market.aspx?pagename=Index",
     "methodology_source_nifty": "https://www.niftyindices.com/indices/equity/broad-based-indices/nifty--50",
     "methodology_source_sensex": "https://www.bseindices.com/Downloads/Factsheet/Factsheet_BSESENSEX_Jan2026.pdf",
-    "note": "Verify official latest NSE Indices and BSE Indices factsheets before research conclusions or live trading."
+    "note": "NIFTY snapshot from 29 Oct 2026; SENSEX snapshot from a third-party index-composition table on 29 Oct 2026. Cross-check latest official NSE Indices and BSE Indices factsheets before research conclusions or live trading."
   },
   "NIFTY": {
     "RELIANCE": 8.56,
@@ -19,12 +19,12 @@
     "SBIN": 4.82
   },
   "SENSEX": {
-    "RELIANCE": 10.68,
-    "HDFCBANK": 7.21,
-    "ICICIBANK": 6.72,
-    "INFY": 3.11,
-    "TCS": 6.06,
-    "BHARTIARTL": 8.29,
-    "SBIN": 6.02
+    "RELIANCE": 10.77,
+    "HDFCBANK": 7.15,
+    "ICICIBANK": 6.7,
+    "INFY": 3.12,
+    "TCS": 6.1,
+    "BHARTIARTL": 8.11,
+    "SBIN": 6
   }
 }

@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.engine import EngineInput, evaluate_signal, load_weights  # noqa: E402
+from core.engine import EngineInput, evaluate_signal, load_weights, weighted_basket_flow  # noqa: E402
 
 app = Flask(__name__, template_folder=str(Path(__file__).resolve().parent / "templates"))
 IST = ZoneInfo("Asia/Kolkata")
@@ -59,7 +59,12 @@ def build_demo_telemetry() -> dict:
     history = [-3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0]
     hist_sigma = (sum((v - sum(history) / len(history)) ** 2 for v in history) / (len(history) - 1)) ** 0.5
     stretch = target_z * hist_sigma
-    basket_flow = 0.0008 * math.sin(phase / 2.0)
+    simulated_returns = {
+        symbol: 0.0015 * math.sin(phase + offset * 0.47)
+        for offset, symbol in enumerate(("RELIANCE", "HDFCBANK", "ICICIBANK", "INFY", "TCS", "BHARTIARTL", "SBIN"))
+    }
+    # Use the normalized seven-constituent basket weights even in demo mode.
+    basket_flow = weighted_basket_flow("NIFTY", simulated_returns, WEIGHTS)
     cvd_base = -1000.0 * math.sin(phase)
     cvd_series = [cvd_base + offset for offset in (0.0, -900.0, -1800.0)]
     oi_acceleration = 400.0 + 250.0 * math.sin(phase / 4.0)
