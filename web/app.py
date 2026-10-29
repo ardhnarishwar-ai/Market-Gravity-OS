@@ -14,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 import math
+import os
 import sys
 import time
 
@@ -23,12 +24,26 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv(ROOT / ".env", override=False)
+except ImportError:
+    pass
+
 from core.engine import EngineInput, evaluate_signal, load_weights, weighted_basket_flow  # noqa: E402
+from smartapi_connector.live_feed import AngelLiveFeed, credentials_present  # noqa: E402
 
 app = Flask(__name__, template_folder=str(Path(__file__).resolve().parent / "templates"))
 IST = ZoneInfo("Asia/Kolkata")
 WEIGHTS_PATH = ROOT / "config" / "weights.json"
 WEIGHTS = load_weights(WEIGHTS_PATH)
+LIVE_FEED: AngelLiveFeed | None = None
+if credentials_present():
+    try:
+        LIVE_FEED = AngelLiveFeed(os.getenv("MGO_INDEX", "NIFTY").upper())
+        LIVE_FEED.start()
+    except Exception:
+        logging.getLogger(__name__).exception("Live feed initialization failed; simulated fallback remains available")
 
 # Conservative demo-only configuration mirrors config/settings.yaml without
 # requiring a YAML parser at runtime.
@@ -141,6 +156,37 @@ def build_demo_telemetry() -> dict:
     }
 
 
+def build_live_telemetry(snapshot: dict) -> dict:
+    """Feed real spot/near-ATM observations into the engine; fail closed on missing inputs."""
+    spot=snapshot.get("spot") or {}; options=snapshot.get("options") or {}
+    spot_price=spot.get("ltp"); atm=snapshot.get("atm_strike")
+    fresh=bool(snapshot.get("connected") and spot_price and spot.get("received_at"))
+    engine_input=EngineInput(stretch=0.0,stretch_history=[],iv_percentile=50.0,basket_flow=0.0,
+        cvd_series=[],downward_displacement_atr=0.0,oi_acceleration=float(snapshot.get("oi_acceleration") or 0.0),
+        net_gamma=0.0,now_local=datetime.now(IST),data_fresh=False,news_lockout=False,
+        spot_price=float(spot_price) if spot_price is not None else None,
+        atm_strike=float(atm) if atm is not None else None,atm_options=options)
+    signal=evaluate_signal(engine_input,SETTINGS)
+    labels=[("1_dynamic_stretch","Dynamic ATR Z-score"),("2_weighted_capital_flow","Free-float weighted basket flow"),
+        ("3_cvd_displacement","CVD + downward displacement"),("4_moneyness_oi_acceleration","ATM ±1 OI acceleration"),
+        ("5_gamma_regime","Gamma regime / expiry lockout"),("6_execution_filter","Spread / limit-chaser filter"),
+        ("7_risk_guardian","Hard circuit breaker")]
+    layers=[]
+    for key,label in labels:
+        if key=="4_moneyness_oi_acceleration" and options: status,detail="LIVE TICKS","Raw option ticks; OI delta is not a validated signal."
+        elif key=="6_execution_filter": status,detail="DISABLED","Order routing is disabled."
+        else: status,detail="UNAVAILABLE","Required validated input stream is not connected; layer is gated."
+        layers.append({"id":key,"label":label,"status":status,"passed":False,"details":detail})
+    return {"mode":"LIVE PARTIAL" if fresh else "LIVE CONNECTING","live_data_connected":fresh,"execution_enabled":False,
+        "timestamp":datetime.now(IST).isoformat(timespec="seconds"),"index":f"{snapshot.get('index','NIFTY')} · ANGEL ONE",
+        "signal":{"allowed":False,"score_pct":0,"label":"SIGNAL DISABLED · INCOMPLETE FEED"},
+        "metrics":{"z_score":None,"dynamic_threshold":None,"iv_percentile":None,"basket_flow_pct":None,
+            "cvd_velocity":None,"net_gamma":"UNAVAILABLE","oi_acceleration":snapshot.get("oi_acceleration"),
+            "spot":spot_price,"spot_received_at":spot.get("received_at"),"atm_strike":atm,"atm_options":options},
+        "risk":SETTINGS["risk"],"layers":layers,"reasons":["live_feed_partial","required_cvd_iv_gamma_and_constituent_flow_not_connected"],
+        "warning":"Angel One live spot/near-ATM option ticks only. Other signal inputs are unavailable; signal generation and order routing remain disabled."}
+
+
 @app.get("/")
 def dashboard():
     return render_template("index.html")
@@ -148,7 +194,14 @@ def dashboard():
 
 @app.get("/api/telemetry")
 def telemetry():
-    response = jsonify(build_demo_telemetry())
+    snapshot = LIVE_FEED.snapshot() if LIVE_FEED else None
+    if snapshot and snapshot.get("status") in ("connected", "connecting") and (snapshot.get("spot") or snapshot.get("status") == "connecting"):
+        payload = build_live_telemetry(snapshot)
+    else:
+        payload = build_demo_telemetry()
+        if snapshot and snapshot.get("status") == "error":
+            payload["warning"] = "Angel One feed unavailable; simulated fallback is active. Check server logs and local environment credentials."
+    response = jsonify(payload)
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
     return response
@@ -156,12 +209,9 @@ def telemetry():
 
 @app.get("/health")
 def health():
-    return jsonify({
-        "status": "ok",
-        "mode": "SIMULATED",
-        "live_data_connected": False,
-        "execution_enabled": False,
-    })
+    snapshot = LIVE_FEED.snapshot() if LIVE_FEED else None
+    return jsonify({"status":"ok","mode":snapshot.get("status") if snapshot else "simulated",
+        "live_data_connected":bool(snapshot and snapshot.get("connected")),"execution_enabled":False})
 
 
 if __name__ == "__main__":

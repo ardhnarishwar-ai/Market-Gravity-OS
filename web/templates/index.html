@@ -43,7 +43,9 @@ footer{color:var(--muted);font-size:11px;text-align:center;margin-top:16px}
         <div class="stat"><div class="label">Index</div><div class="big" id="index-name">NIFTY · DEMO</div><div class="sub">Simulated feed</div></div>
         <div class="stat"><div class="label">Dynamic Z / threshold</div><div class="big cyan" id="z-score">—</div><div class="sub" id="iv-value">IV percentile: —</div></div>
         <div class="stat"><div class="label">CVD velocity</div><div class="big" id="cvd-value">—</div><div class="sub">Synthetic contracts / observation</div></div>
-        <div class="stat"><div class="label">Net gamma</div><div class="big amber" id="gamma-value">UNKNOWN</div><div class="sub">Mock regime only</div></div>
+        <div class="stat"><div class="label">Net gamma</div><div class="big amber" id="gamma-value">UNKNOWN</div><div class="sub">Unavailable until full options flow is wired</div></div>
+        <div class="stat"><div class="label">Spot LTP</div><div class="big cyan" id="spot-value">—</div><div class="sub" id="spot-time">No live tick</div></div>
+        <div class="stat"><div class="label">ATM strike</div><div class="big" id="atm-value">—</div><div class="sub" id="atm-options">CE/PE awaiting ticks</div></div>
       </div>
     </article>
     <article class="card layers">
@@ -58,7 +60,7 @@ footer{color:var(--muted);font-size:11px;text-align:center;margin-top:16px}
       <div class="riskline"><span>Trades per session</span><strong id="max-trades">2 max</strong></div>
       <div class="riskline"><span>Daily drawdown lock</span><strong class="amber" id="max-loss">−₹3,000</strong></div>
       <div class="riskline"><span>Consecutive stop-outs</span><strong id="max-stopouts">2 max</strong></div>
-      <div class="notice" id="warning">Synthetic demo values only. No broker orders are enabled.</div>
+      <div class="notice" id="warning">Market data only; signal and broker order routing remain disabled.</div>
     </article>
     <article class="card notes">
       <div class="label">System health</div>
@@ -66,7 +68,7 @@ footer{color:var(--muted);font-size:11px;text-align:center;margin-top:16px}
       <div class="riskline"><span>Broker routing</span><strong id="execution-status">DISABLED</strong></div>
       <div class="riskline"><span>Weights</span><strong class="amber">INDEX SNAPSHOT · VERIFY</strong></div>
       <div class="riskline"><span>Model validation</span><strong>NOT TESTED LIVE</strong></div>
-      <p class="muted" style="font-size:12px;margin-bottom:0">The API refreshes this demo once per second. It is not an exchange stream. Connect a timestamped, licensed feed and validate replay, latency, fees and slippage before live use.</p>
+      <p class="muted" style="font-size:12px;margin-bottom:0">Telemetry refreshes once per second. Live mode currently covers Angel One spot and nearby ATM option ticks only; incomplete inputs keep the signal disabled.</p>
     </article>
   </section>
   <footer>Market-Gravity-OS · Research prototype · Not investment advice · Demo values are not market data</footer>
@@ -114,7 +116,7 @@ async function pollTelemetry() {
     if (!response.ok) throw new Error("HTTP " + response.status);
     const data = await response.json();
     const score = Math.max(0, Math.min(100, Number(data.signal?.score_pct || 0)));
-    setText("mode-pill", data.live_data_connected ? "LIVE DATA" : "SIMULATED · NO LIVE DATA");
+    setText("mode-pill", String(data.mode || "").startsWith("LIVE") ? data.mode : "SIMULATED · NO LIVE DATA");
     setText("updated-at", "Updated " + (data.timestamp || "—"));
     setText("signal-value", score.toFixed(1) + "% · " + (data.mode || "DEMO"));
     setText("signal-label", data.signal?.label || "No signal");
@@ -123,11 +125,16 @@ async function pollTelemetry() {
     setText("iv-value", "IV percentile: " + (data.metrics?.iv_percentile ?? "—") + "%");
     setText("cvd-value", Number(data.metrics?.cvd_velocity || 0).toLocaleString("en-IN"));
     setText("gamma-value", data.metrics?.net_gamma || "UNKNOWN");
+    setText("spot-value", data.metrics?.spot == null ? "—" : Number(data.metrics.spot).toLocaleString("en-IN", {maximumFractionDigits:2}));
+    setText("spot-time", data.metrics?.spot_received_at ? "Tick " + data.metrics.spot_received_at : "No live tick");
+    setText("atm-value", data.metrics?.atm_strike == null ? "—" : Number(data.metrics.atm_strike).toLocaleString("en-IN"));
+    const optionQuotes = Object.values(data.metrics?.atm_options || {}).slice(0,4).map(q => q.symbol + " ₹" + Number(q.ltp).toFixed(2));
+    setText("atm-options", optionQuotes.length ? optionQuotes.join(" · ") : "CE/PE awaiting ticks");
     setText("risk-per-trade", "₹" + Number(data.risk?.max_risk_per_trade_inr || 1500).toLocaleString("en-IN") + " max");
     setText("max-trades", (data.risk?.max_trades_per_day ?? 2) + " max");
     setText("max-loss", "−₹" + Number(data.risk?.max_daily_drawdown_inr || 3000).toLocaleString("en-IN"));
     setText("max-stopouts", (data.risk?.max_consecutive_stopouts ?? 2) + " max");
-    setText("feed-status", data.live_data_connected ? "CONNECTED" : "SIMULATED");
+    setText("feed-status", data.live_data_connected ? "CONNECTED" : (String(data.mode || "").startsWith("LIVE") ? "CONNECTING" : "SIMULATED"));
     setText("execution-status", data.execution_enabled ? "ENABLED" : "DISABLED");
     setText("warning", data.warning || "Demo telemetry only.");
     document.getElementById("gaugeNeedle").setAttribute("transform", "rotate(" + (-90 + score * 1.8) + " 130 135)");

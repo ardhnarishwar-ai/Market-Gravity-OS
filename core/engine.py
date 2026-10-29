@@ -230,6 +230,9 @@ class EngineInput:
     is_expiry_day: bool = False
     data_fresh: bool = True
     news_lockout: bool = False
+    spot_price: float | None = None
+    atm_strike: float | None = None
+    atm_options: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
 
 
 @dataclass
