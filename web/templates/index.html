@@ -12,7 +12,7 @@ main{max-width:1080px;margin:auto;padding:18px 14px 40px}.top{display:flex;align
 h1{font-size:clamp(22px,5vw,32px);margin:6px 0 4px;letter-spacing:-.03em}.lede{color:var(--muted);margin:0 0 18px}
 .grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px}.card{background:linear-gradient(145deg,#14202d,#101923);border:1px solid var(--line);border-radius:16px;padding:15px;min-width:0}.hero{grid-column:span 5}.metrics{grid-column:span 7}.layers{grid-column:span 12}.risk{grid-column:span 6}.notes{grid-column:span 6}.label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.11em;font-weight:700}.big{font-size:28px;font-weight:800;letter-spacing:-.04em;margin-top:3px}.cyan{color:var(--cyan)}.green{color:var(--green)}.amber{color:var(--amber)}.muted{color:var(--muted)}
 .gauge-wrap{display:flex;justify-content:center;margin:4px 0 0}.gauge{width:min(100%,270px);height:auto}.gauge-label{text-align:center;margin-top:-4px}.gauge-label strong{display:block;font-size:22px}.statgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stat{padding:12px;border:1px solid var(--line);border-radius:12px;background:#0e1721}.stat .big{font-size:21px}
-.layer-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.layer{display:flex;align-items:center;gap:9px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#0e1721}.dot{width:8px;height:8px;border-radius:50%;background:var(--amber);flex:0 0 auto}.layer strong{display:block;font-size:12px}.layer small{color:var(--muted);font-size:11px}.status{margin-left:auto;font-size:10px;color:var(--amber);font-weight:800}
+.layer-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.layer{display:flex;align-items:center;gap:9px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#0e1721}.dot{width:8px;height:8px;border-radius:50%;background:var(--amber);flex:0 0 auto}.layer strong{display:block;font-size:12px}.layer small{color:var(--muted);font-size:11px}.status{margin-left:auto;font-size:10px;color:var(--amber);font-weight:800;text-align:right}.status.pass{color:var(--green)}.status.wait{color:var(--amber)}.status.off{color:var(--muted)}.dot.pass{background:var(--green)}.dot.wait{background:var(--amber)}.dot.off{background:var(--muted)}
 .riskline{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding:9px 0}.riskline:last-child{border:0}.notice{border:1px solid #5d482a;background:#241e16;color:#f1d2a0;padding:11px;border-radius:10px;font-size:12px;margin-top:12px}
 footer{color:var(--muted);font-size:11px;text-align:center;margin-top:16px}
 @media(max-width:700px){main{padding:14px 10px 28px}.top{align-items:flex-start}.hero,.metrics,.layers,.risk,.notes{grid-column:span 12}.hero{padding:12px}.layer-list{grid-template-columns:1fr}.statgrid{gap:8px}.card{border-radius:13px;padding:13px}.big{font-size:25px}}
@@ -20,62 +20,127 @@ footer{color:var(--muted);font-size:11px;text-align:center;margin-top:16px}
 </head>
 <body>
 <main>
-  <header class="top"><div><div class="brand">◈ MARKET GRAVITY OS</div><div class="sub">Quant research cockpit · Mobile layout</div></div><span class="pill">DEMO · NO LIVE DATA</span></header>
+  <header class="top"><div><div class="brand">◈ MARKET GRAVITY OS</div><div class="sub">Quant research cockpit · Mobile layout</div></div><span class="pill" id="mode-pill">SIMULATED · NO LIVE DATA</span></header>
   <h1>Gravity Alpha Monitor</h1>
-  <p class="lede">Seven-layer signal matrix and capital protection status.</p>
+  <p class="lede">Seven-layer signal matrix and capital protection status. <span id="updated-at">Waiting for telemetry…</span></p>
   <section class="grid">
     <article class="card hero">
       <div class="label">Composite signal alignment</div>
       <div class="gauge-wrap">
-        <svg class="gauge" viewBox="0 0 260 160" role="img" aria-label="Demo gauge at 60 percent alignment">
+        <svg class="gauge" viewBox="0 0 260 160" role="img" aria-label="Signal alignment gauge">
           <path d="M28 135 A102 102 0 0 1 232 135" fill="none" stroke="#263747" stroke-width="15" stroke-linecap="round"/>
-          <path d="M28 135 A102 102 0 0 1 197 54" fill="none" stroke="#59d9e8" stroke-width="15" stroke-linecap="round"/>
-          <line x1="130" y1="135" x2="184" y2="67" stroke="#e8f0f7" stroke-width="3" stroke-linecap="round"/>
+          <path id="gaugeProgress" d="M28 135 A102 102 0 0 1 232 135" fill="none" stroke="#59d9e8" stroke-width="15" stroke-linecap="round" stroke-dasharray="320" stroke-dashoffset="128"/>
+          <line id="gaugeNeedle" x1="130" y1="135" x2="130" y2="55" stroke="#e8f0f7" stroke-width="3" stroke-linecap="round" transform="rotate(18 130 135)"/>
           <circle cx="130" cy="135" r="7" fill="#e8f0f7"/>
           <text x="22" y="155" fill="#93a5b7" font-size="10">0</text><text x="222" y="155" fill="#93a5b7" font-size="10">100</text>
         </svg>
       </div>
-      <div class="gauge-label"><strong class="cyan">60% · DEMO</strong><span class="muted">Illustrative alignment only</span></div>
+      <div class="gauge-label"><strong class="cyan" id="signal-value">60% · DEMO</strong><span class="muted" id="signal-label">Illustrative alignment only</span></div>
     </article>
     <article class="card metrics">
-      <div class="label">Market snapshot · Mock values</div>
+      <div class="label">Market snapshot · Synthetic telemetry</div>
       <div class="statgrid" style="margin-top:12px">
-        <div class="stat"><div class="label">Index</div><div class="big">NIFTY</div><div class="sub">Mock feed</div></div>
-        <div class="stat"><div class="label">Dynamic Z</div><div class="big cyan">−3.1σ</div><div class="sub">Threshold: illustrative</div></div>
-        <div class="stat"><div class="label">CVD velocity</div><div class="big">−8.4k</div><div class="sub">Mock contracts / window</div></div>
-        <div class="stat"><div class="label">Net gamma</div><div class="big amber">UNKNOWN</div><div class="sub">No options feed connected</div></div>
+        <div class="stat"><div class="label">Index</div><div class="big" id="index-name">NIFTY · DEMO</div><div class="sub">Simulated feed</div></div>
+        <div class="stat"><div class="label">Dynamic Z / threshold</div><div class="big cyan" id="z-score">—</div><div class="sub" id="iv-value">IV percentile: —</div></div>
+        <div class="stat"><div class="label">CVD velocity</div><div class="big" id="cvd-value">—</div><div class="sub">Synthetic contracts / observation</div></div>
+        <div class="stat"><div class="label">Net gamma</div><div class="big amber" id="gamma-value">UNKNOWN</div><div class="sub">Mock regime only</div></div>
       </div>
     </article>
     <article class="card layers">
       <div class="label">Seven-layer signal matrix</div>
-      <div class="layer-list">
-        <div class="layer"><span class="dot"></span><div><strong>01 · Dynamic ATR Z-score</strong><small>Rolling volatility normalization</small></div><span class="status">DEMO</span></div>
-        <div class="layer"><span class="dot"></span><div><strong>02 · Capital-weighted basket</strong><small>Free-float weights need verification</small></div><span class="status">DEMO</span></div>
-        <div class="layer"><span class="dot"></span><div><strong>03 · CVD + displacement</strong><small>Tick freshness required</small></div><span class="status">DEMO</span></div>
-        <div class="layer"><span class="dot"></span><div><strong>04 · Moneyness OI acceleration</strong><small>ATM ±1 strikes</small></div><span class="status">DEMO</span></div>
-        <div class="layer"><span class="dot"></span><div><strong>05 · Gamma regime / expiry lockout</strong><small>13:30 expiry fade gate</small></div><span class="status">DEMO</span></div>
-        <div class="layer"><span class="dot"></span><div><strong>06 · Spread / limit chaser</strong><small>Simulation only · 1.5s timeout</small></div><span class="status">OFF</span></div>
-        <div class="layer"><span class="dot"></span><div><strong>07 · Circuit breaker</strong><small>₹3,000 daily loss / 2 stop-outs</small></div><span class="status">DEMO</span></div>
+      <div class="layer-list" id="layer-list">
+        <div class="layer"><span class="dot"></span><div><strong>Connecting telemetry…</strong><small>Demo feed</small></div><span class="status">WAIT</span></div>
       </div>
     </article>
     <article class="card risk">
       <div class="label">Risk guardian · Configured limits</div>
-      <div class="riskline"><span>Risk per trade</span><strong>₹1,500 max</strong></div>
-      <div class="riskline"><span>Trades per session</span><strong>2 max</strong></div>
-      <div class="riskline"><span>Daily drawdown lock</span><strong class="amber">−₹3,000</strong></div>
-      <div class="riskline"><span>Consecutive stop-outs</span><strong>2 max</strong></div>
-      <div class="notice">Execution is disabled. This screen is a static demonstration; no live quotes, positions, or broker actions are connected.</div>
+      <div class="riskline"><span>Risk per trade</span><strong id="risk-per-trade">₹1,500 max</strong></div>
+      <div class="riskline"><span>Trades per session</span><strong id="max-trades">2 max</strong></div>
+      <div class="riskline"><span>Daily drawdown lock</span><strong class="amber" id="max-loss">−₹3,000</strong></div>
+      <div class="riskline"><span>Consecutive stop-outs</span><strong id="max-stopouts">2 max</strong></div>
+      <div class="notice" id="warning">Synthetic demo values only. No broker orders are enabled.</div>
     </article>
     <article class="card notes">
       <div class="label">System health</div>
-      <div class="riskline"><span>Data feed</span><strong class="amber">NOT CONNECTED</strong></div>
-      <div class="riskline"><span>Broker routing</span><strong>DISABLED</strong></div>
-      <div class="riskline"><span>Weights</span><strong class="amber">PLACEHOLDERS</strong></div>
+      <div class="riskline"><span>Data feed</span><strong class="amber" id="feed-status">SIMULATED</strong></div>
+      <div class="riskline"><span>Broker routing</span><strong id="execution-status">DISABLED</strong></div>
+      <div class="riskline"><span>Weights</span><strong class="amber">INDEX SNAPSHOT · VERIFY</strong></div>
       <div class="riskline"><span>Model validation</span><strong>NOT TESTED LIVE</strong></div>
-      <p class="muted" style="font-size:12px;margin-bottom:0">Connect a timestamped data adapter and validate with replay, walk-forward tests, realistic latency, fees and slippage before considering paper trading.</p>
+      <p class="muted" style="font-size:12px;margin-bottom:0">The API refreshes this demo once per second. It is not an exchange stream. Connect a timestamped, licensed feed and validate replay, latency, fees and slippage before live use.</p>
     </article>
   </section>
   <footer>Market-Gravity-OS · Research prototype · Not investment advice · Demo values are not market data</footer>
 </main>
+<script>
+const layerNames = {
+  "1_dynamic_stretch":"Dynamic ATR Z-score",
+  "2_weighted_capital_flow":"Free-float weighted basket flow",
+  "3_cvd_displacement":"CVD + downward displacement",
+  "4_moneyness_oi_acceleration":"ATM ±1 OI acceleration",
+  "5_gamma_regime":"Gamma regime / expiry lockout",
+  "6_execution_filter":"Spread / limit-chaser filter",
+  "7_risk_guardian":"Hard circuit breaker"
+};
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+function renderLayers(layers) {
+  const root = document.getElementById("layer-list");
+  root.replaceChildren();
+  for (const layer of layers || []) {
+    const row = document.createElement("div");
+    row.className = "layer";
+    const dot = document.createElement("span");
+    const state = layer.status === "PASS" ? "pass" :
+      (layer.status === "WAIT" ? "wait" : "off");
+    dot.className = "dot " + state;
+    const body = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = layer.label || layerNames[layer.id] || layer.id;
+    const detail = document.createElement("small");
+    detail.textContent = layer.details || (layer.passed ? "Layer condition satisfied" : "Condition not satisfied / gated");
+    body.append(title, detail);
+    const status = document.createElement("span");
+    status.className = "status " + state;
+    status.textContent = layer.status || "UNKNOWN";
+    row.append(dot, body, status);
+    root.append(row);
+  }
+}
+async function pollTelemetry() {
+  try {
+    const response = await fetch("/api/telemetry", {cache:"no-store"});
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json();
+    const score = Math.max(0, Math.min(100, Number(data.signal?.score_pct || 0)));
+    setText("mode-pill", data.live_data_connected ? "LIVE DATA" : "SIMULATED · NO LIVE DATA");
+    setText("updated-at", "Updated " + (data.timestamp || "—"));
+    setText("signal-value", score.toFixed(1) + "% · " + (data.mode || "DEMO"));
+    setText("signal-label", data.signal?.label || "No signal");
+    setText("index-name", data.index || "—");
+    setText("z-score", (data.metrics?.z_score ?? "—") + "σ / " + (data.metrics?.dynamic_threshold ?? "—") + "σ");
+    setText("iv-value", "IV percentile: " + (data.metrics?.iv_percentile ?? "—") + "%");
+    setText("cvd-value", Number(data.metrics?.cvd_velocity || 0).toLocaleString("en-IN"));
+    setText("gamma-value", data.metrics?.net_gamma || "UNKNOWN");
+    setText("risk-per-trade", "₹" + Number(data.risk?.max_risk_per_trade_inr || 1500).toLocaleString("en-IN") + " max");
+    setText("max-trades", (data.risk?.max_trades_per_day ?? 2) + " max");
+    setText("max-loss", "−₹" + Number(data.risk?.max_daily_drawdown_inr || 3000).toLocaleString("en-IN"));
+    setText("max-stopouts", (data.risk?.max_consecutive_stopouts ?? 2) + " max");
+    setText("feed-status", data.live_data_connected ? "CONNECTED" : "SIMULATED");
+    setText("execution-status", data.execution_enabled ? "ENABLED" : "DISABLED");
+    setText("warning", data.warning || "Demo telemetry only.");
+    document.getElementById("gaugeNeedle").setAttribute("transform", "rotate(" + (-90 + score * 1.8) + " 130 135)");
+    document.getElementById("gaugeProgress").setAttribute("stroke-dashoffset", String(320 * (1 - score / 100)));
+    renderLayers(data.layers);
+  } catch (error) {
+    setText("updated-at", "Telemetry unavailable · retrying");
+    setText("feed-status", "API OFFLINE");
+    setText("warning", "Could not fetch telemetry. No live trading action is possible from this dashboard.");
+  }
+}
+pollTelemetry();
+setInterval(pollTelemetry, 1000);
+</script>
 </body>
 </html>

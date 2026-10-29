@@ -1,27 +1,30 @@
 {
   "_metadata": {
-    "status": "ILLUSTRATIVE_PLACEHOLDERS_NOT_FOR_LIVE_TRADING",
-    "description": "Weights are deliberately unverified placeholders. Replace with the latest official index constituent/free-float weights before using the basket-flow calculation.",
-    "source_required": "Official NSE Indices and BSE index factsheets",
-    "last_verified": null,
-    "normalization": "Each index basket is normalized to sum to 1.0 by the engine."
+    "status": "CURRENT_INDEX_WEIGHT_SNAPSHOT_NOT_OFFICIAL_EXCHANGE_FILE",
+    "as_of": "2026-10-29",
+    "description": "Percentages are index weights for the seven requested constituents, not their own free-float shares. Index weights use free-float methodology. The engine normalizes only these seven selected constituents to calculate a partial-basket flow; they do not sum to 100% of either full index.",
+    "nifty_source": "https://www.arihantcapital.com/index-constituents",
+    "sensex_source": "https://www.anandrathi.com/indices/bse-sensex",
+    "methodology_source_nifty": "https://www.niftyindices.com/indices/equity/broad-based-indices/nifty--50",
+    "methodology_source_sensex": "https://www.bseindices.com/Downloads/Factsheet/Factsheet_BSESENSEX_Jan2026.pdf",
+    "note": "Verify official latest NSE Indices and BSE Indices factsheets before research conclusions or live trading."
   },
   "NIFTY": {
-    "RELIANCE": 0.1,
-    "HDFCBANK": 0.1,
-    "ICICIBANK": 0.08,
-    "INFY": 0.07,
-    "BHARTIARTL": 0.06,
-    "TCS": 0.05,
-    "OTHER_PLACEHOLDER": 0.54
+    "RELIANCE": 8.56,
+    "HDFCBANK": 5.78,
+    "ICICIBANK": 5.39,
+    "INFY": 2.49,
+    "TCS": 4.85,
+    "BHARTIARTL": 6.64,
+    "SBIN": 4.82
   },
   "SENSEX": {
-    "RELIANCE": 0.12,
-    "HDFCBANK": 0.11,
-    "ICICIBANK": 0.09,
-    "INFY": 0.07,
-    "BHARTIARTL": 0.06,
-    "TCS": 0.05,
-    "OTHER_PLACEHOLDER": 0.5
+    "RELIANCE": 10.68,
+    "HDFCBANK": 7.21,
+    "ICICIBANK": 6.72,
+    "INFY": 3.11,
+    "TCS": 6.06,
+    "BHARTIARTL": 8.29,
+    "SBIN": 6.02
   }
 }
