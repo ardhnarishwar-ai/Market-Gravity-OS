@@ -35,7 +35,8 @@ class AngelLiveFeed:
             if not jwt or not feed: raise RuntimeError("Login response lacks feed tokens")
             res=requests.get(MASTER_URL,timeout=25); res.raise_for_status(); master=res.json()
             today=datetime.now().date(); rows=[]
-            for row in master if isinstance(master,list) else []:
+            source_rows = master if isinstance(master, list) else []
+            for row in source_rows:
                 if row.get("exch_seg") not in ("NFO","BFO") or row.get("instrumenttype")!="OPTIDX" or row.get("name","").upper()!=self.index: continue
                 try: expiry=datetime.strptime(row["expiry"],"%d%b%Y").date(); strike=float(row["strike"])/100
                 except (KeyError,TypeError,ValueError): continue
