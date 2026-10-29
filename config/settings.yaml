@@ -1,0 +1,61 @@
+# Market-Gravity-OS quantitative prototype settings
+# Safe defaults: paper mode only. No broker order is sent by this repository.
+app:
+  name: Market-Gravity-OS
+  mode: paper
+  timezone: Asia/Kolkata
+  dashboard_demo_mode: true
+
+market:
+  indices: ["NIFTY", "SENSEX"]
+  atr_lookback_days: 5
+  atr_intraday_bars: 14
+  zscore_lookback: 60
+  iv_percentile_lookback_days: 252
+  zscore_base_threshold: 4.2
+  iv_percentile_low: 20
+  iv_percentile_high: 80
+  cvd_velocity_lookback_seconds: 30
+  minimum_downward_displacement_atr: 0.15
+  oi_moneyness_steps: 1
+  oi_acceleration_lookback: 3
+  expiry_fade_lockout_time: "13:30"
+
+execution:
+  enabled: false
+  mode: simulation
+  max_spread_ticks: 3
+  limit_offset_ticks: 1
+  chase_timeout_ms: 1500
+  max_quote_age_ms: 500
+  require_fresh_bid_ask: true
+  reject_market_orders: true
+
+risk:
+  max_trades_per_day: 2
+  max_risk_per_trade_inr: 1500
+  max_daily_drawdown_inr: 3000
+  max_consecutive_stopouts: 2
+  circuit_breaker_persistent: true
+  require_manual_session_reset: true
+  cancel_pending_orders_on_lockout: true
+  flatten_position_on_lockout: false # Requires separately reviewed broker integration.
+
+contracts:
+  # Set actual exchange lot sizes from current official contract specifications.
+  nifty_lot_size: null
+  sensex_lot_size: null
+
+credentials:
+  # Set secrets in the runtime environment, never commit tokens here.
+  angel_one_api_key_env: ANGEL_ONE_API_KEY
+  angel_one_client_code_env: ANGEL_ONE_CLIENT_CODE
+  angel_one_jwt_token_env: ANGEL_ONE_JWT_TOKEN
+  angel_one_feed_token_env: ANGEL_ONE_FEED_TOKEN
+
+data:
+  require_timestamped_ticks: true
+  max_tick_age_ms: 500
+  stale_data_action: block_new_entries
+  news_event_gate_enabled: true
+  live_data_connected: false

@@ -1,0 +1,27 @@
+{
+  "_metadata": {
+    "status": "ILLUSTRATIVE_PLACEHOLDERS_NOT_FOR_LIVE_TRADING",
+    "description": "Weights are deliberately unverified placeholders. Replace with the latest official index constituent/free-float weights before using the basket-flow calculation.",
+    "source_required": "Official NSE Indices and BSE index factsheets",
+    "last_verified": null,
+    "normalization": "Each index basket is normalized to sum to 1.0 by the engine."
+  },
+  "NIFTY": {
+    "RELIANCE": 0.1,
+    "HDFCBANK": 0.1,
+    "ICICIBANK": 0.08,
+    "INFY": 0.07,
+    "BHARTIARTL": 0.06,
+    "TCS": 0.05,
+    "OTHER_PLACEHOLDER": 0.54
+  },
+  "SENSEX": {
+    "RELIANCE": 0.12,
+    "HDFCBANK": 0.11,
+    "ICICIBANK": 0.09,
+    "INFY": 0.07,
+    "BHARTIARTL": 0.06,
+    "TCS": 0.05,
+    "OTHER_PLACEHOLDER": 0.5
+  }
+}
