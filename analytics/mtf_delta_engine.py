@@ -234,16 +234,38 @@ def _macd(values):
     }
 
 
-def calculate_mtf_delta(candles_5m, now=None):
-    candles = normalize_candles(candles_5m)
+def calculate_mtf_delta(candles_5m, now=None, current_forming_candle=None):
+    forming = None
+    if isinstance(current_forming_candle, dict):
+        try:
+            fo = _number(current_forming_candle.get("open"))
+            fh = _number(current_forming_candle.get("high"))
+            fl = _number(current_forming_candle.get("low"))
+            fc = _number(current_forming_candle.get("close"))
+            fv = _number(current_forming_candle.get("volume"))
+            fd = _number(current_forming_candle.get("running_delta"))
+            if None not in (fo, fh, fl, fc, fv) and fv >= 0:
+                spread = fh - fl
+                if fd is None:
+                    fd = (fv * ((fc - fl) / spread - (fh - fc) / spread) if spread > 0 and fv > 0 else 0.0)
+                live_absorption = "TRAPPED_BUYERS_FORMING" if fc > fo and fd < 0 and fv > 0 else "NONE"
+                forming = {"state": "FORMING", "delta": round(fd, 2), "absorption": live_absorption, "price_positive": fc > fo, "volume": fv, "timestamp": current_forming_candle.get("timestamp")}
+        except (TypeError, ValueError):
+            forming = None
 
+    def waiting(reason):
+        result = _safe_wait(reason)
+        result.update({"delta_5m_running": forming.get("delta") if forming else None, "candle_5m_state": "FORMING" if forming else "CLOSED", "absorption_live": forming.get("absorption", "NONE") if forming else "NONE", "current_forming_candle": forming})
+        return result
+
+    candles = normalize_candles(candles_5m)
     if not candles:
-        return _safe_wait("No valid 5-minute OHLCV candles")
+        return waiting("No valid 5-minute OHLCV candles")
 
     now = now or datetime.now(timezone.utc)
 
     if now.tzinfo is None:
-        return _safe_wait("Current time must be timezone-aware")
+        return waiting("Current time must be timezone-aware")
 
     now = now.astimezone(timezone.utc)
 
@@ -253,31 +275,31 @@ def calculate_mtf_delta(candles_5m, now=None):
     ]
 
     if not candles:
-        return _safe_wait("Waiting for a completed 5-minute candle")
+        return waiting("Waiting for a completed 5-minute candle")
 
     last_close = candles[-1]["timestamp"] + timedelta(minutes=5)
 
     if (now - last_close).total_seconds() > MAX_5M_AGE_SECONDS:
-        return _safe_wait("5-minute OHLCV feed is stale")
+        return waiting("5-minute OHLCV feed is stale")
 
     for previous, current in zip(candles[-60:-1], candles[-59:]):
         a = previous["timestamp"].astimezone(IST)
         b = current["timestamp"].astimezone(IST)
         if a.date() == b.date() and a.time() < time(15, 30) and (current["timestamp"] - previous["timestamp"]).total_seconds() != 300:
-            return _safe_wait("Gap detected in recent 5-minute candles")
+            return waiting("Gap detected in recent 5-minute candles")
 
     bars15 = _resample(candles, 15)
     bars30 = _resample(candles, 30)
     bars60 = _resample(candles, 60)
 
     if len(candles) < 35:
-        return _safe_wait("Need at least 35 completed 5-minute candles")
+        return waiting("Need at least 35 completed 5-minute candles")
 
     if len(bars15) < 3 or len(bars30) < 2:
-        return _safe_wait("Waiting for complete 15m and 30m bars")
+        return waiting("Waiting for complete 15m and 30m bars")
 
     if len(bars60) < 200:
-        return _safe_wait("Waiting for 200 complete 60m bars for EMA200")
+        return waiting("Waiting for 200 complete 60m bars for EMA200")
 
     def is_closed(bar, minutes):
         return bar["timestamp"] + timedelta(minutes=minutes) <= now
@@ -287,7 +309,7 @@ def calculate_mtf_delta(candles_5m, now=None):
     bars60 = [b for b in bars60 if is_closed(b, 60)]
 
     if len(bars15) < 3 or len(bars30) < 2 or len(bars60) < 200:
-        return _safe_wait("Waiting for completed higher-timeframe bars")
+        return waiting("Waiting for completed higher-timeframe bars")
 
     delta5 = _delta(candles[-1])
     delta15 = _delta(bars15[-1])
@@ -307,7 +329,7 @@ def calculate_mtf_delta(candles_5m, now=None):
     ema200 = _ema(closes60, 200)
 
     if ema200 is None:
-        return _safe_wait("60m EMA200 unavailable")
+        return waiting("60m EMA200 unavailable")
 
     trend = (
         "BULLISH" if bars60[-1]["close"] > ema200
@@ -319,7 +341,7 @@ def calculate_mtf_delta(candles_5m, now=None):
     atr = _atr(candles, 14)
 
     if macd is None or atr is None:
-        return _safe_wait("MACD or ATR history insufficient")
+        return waiting("MACD or ATR history insufficient")
 
     deltas = [delta5, delta15, delta30, delta60]
     positive = sum(x > 0 for x in deltas)
@@ -334,6 +356,10 @@ def calculate_mtf_delta(candles_5m, now=None):
             **_safe_wait("Multi-timeframe delta is not aligned"),
             "status": "READY",
             "ready": True,
+            "delta_5m_running": forming.get("delta") if forming else None,
+            "candle_5m_state": "FORMING" if forming else "CLOSED",
+            "absorption_live": forming.get("absorption", "NONE") if forming else "NONE",
+            "current_forming_candle": forming,
             "delta_5m": round(delta5, 2),
             "delta_15m": round(delta15, 2),
             "delta_30m": round(delta30, 2),
@@ -378,6 +404,10 @@ def calculate_mtf_delta(candles_5m, now=None):
     return {
         "status": "READY",
         "ready": True,
+        "delta_5m_running": forming.get("delta") if forming else None,
+        "candle_5m_state": "FORMING" if forming else "CLOSED",
+        "absorption_live": forming.get("absorption", "NONE") if forming else "NONE",
+        "current_forming_candle": forming,
         "reason": None,
         "bias": direction,
         "score_pct": round(score, 1),
