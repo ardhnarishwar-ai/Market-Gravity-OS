@@ -144,6 +144,32 @@ class NiftyFuturesCandlePipeline:
             for old in sorted(self._bars)[:-self.max_bars]:
                 self._bars.pop(old,None)
 
+    def forming_snapshot(self):
+        """Return a copy of the active 5m candle and its running OHLCV delta proxy."""
+        with self._lock:
+            if not self._current:
+                return None
+            candle = dict(self._current)
+        spread = candle["high"] - candle["low"]
+        volume = candle["volume"]
+        delta = (
+            volume * (
+                (candle["close"] - candle["low"]) / spread
+                - (candle["high"] - candle["close"]) / spread
+            )
+            if spread > 0 and volume > 0 else 0.0
+        )
+        candle["running_delta"] = round(delta, 2)
+        candle["complete"] = False
+        candle["state"] = "FORMING"
+        candle["price_positive"] = candle["close"] > candle["open"]
+        candle["absorption"] = (
+            "TRAPPED_BUYERS_FORMING"
+            if candle["price_positive"] and delta < 0 and volume > 0
+            else "NONE"
+        )
+        return candle
+
     def snapshot(self):
         with self._lock:
             return [dict(self._bars[k]) for k in sorted(self._bars)][-self.max_bars:]
