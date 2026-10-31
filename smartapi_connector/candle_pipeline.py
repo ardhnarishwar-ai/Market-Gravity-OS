@@ -1,0 +1,149 @@
+"""NIFTY futures 5-minute OHLCV pipeline for SmartAPI ticks."""
+from __future__ import annotations
+from datetime import datetime, timedelta, time, timezone
+from zoneinfo import ZoneInfo
+import threading
+
+IST = ZoneInfo("Asia/Kolkata")
+UTC = timezone.utc
+
+def _utc(value):
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(float(value) / 1000.0, UTC)
+    dt = value if isinstance(value, datetime) else datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=IST)
+    return dt.astimezone(UTC)
+
+def resolve_active_nifty_future(master_rows, today=None):
+    today = today or datetime.now(IST).date()
+    found = []
+    for row in master_rows if isinstance(master_rows, list) else []:
+        if not isinstance(row, dict) or row.get("exch_seg") != "NFO" or row.get("instrumenttype") != "FUTIDX" or str(row.get("name", "")).upper() != "NIFTY":
+            continue
+        try:
+            expiry = datetime.strptime(str(row["expiry"]), "%d%b%Y").date()
+            token, symbol = str(row["token"]), str(row.get("symbol", ""))
+        except (KeyError, TypeError, ValueError):
+            continue
+        if expiry >= today and token and symbol:
+            found.append((expiry, token, symbol))
+    if not found:
+        raise RuntimeError("No unexpired NIFTY FUTIDX contract in instrument master")
+    expiry, token, symbol = min(found)
+    return {"name":"NIFTY","exchange":"NFO","exchange_type":2,"token":token,"symbol":symbol,"expiry":expiry.isoformat()}
+
+def fetch_historical_5m(smart_api, token, days=95):
+    end = datetime.now(IST)
+    start = end - timedelta(days=min(max(int(days), 1), 95))
+    response = smart_api.getCandleData({
+        "exchange":"NFO","symboltoken":str(token),"interval":"FIVE_MINUTE",
+        "fromdate":start.strftime("%Y-%m-%d %H:%M"),"todate":end.strftime("%Y-%m-%d %H:%M")
+    })
+    if not isinstance(response, dict) or not response.get("status"):
+        message = response.get("message", "Historical candle request failed") if isinstance(response, dict) else "Invalid historical response"
+        raise RuntimeError(message)
+    now = datetime.now(UTC)
+    by_time = {}
+    for row in response.get("data") or []:
+        try:
+            ts = _utc(row[0])
+            local = ts.astimezone(IST)
+            if local.time() < time(9,15) or local.time() >= time(15,30) or ts + timedelta(minutes=5) > now:
+                continue
+            offset = local.hour*60 + local.minute - 555
+            bucket = datetime.combine(local.date(), time(9,15), IST) + timedelta(minutes=(offset//5)*5)
+            bucket = bucket.astimezone(UTC)
+            if ts != bucket:
+                continue
+            o,h,l,c,v = map(float, row[1:6])
+            if v < 0 or h < max(o,c,l) or l > min(o,c):
+                continue
+            by_time[bucket.isoformat()] = {"timestamp":bucket.isoformat(),"open":o,"high":h,"low":l,"close":c,"volume":v,"complete":True}
+        except (TypeError, ValueError, IndexError, OverflowError):
+            continue
+    return [by_time[k] for k in sorted(by_time)]
+
+class NiftyFuturesCandlePipeline:
+    def __init__(self, max_bars=3000):
+        self.max_bars=max_bars
+        self._bars={}
+        self._current=None
+        self._last_cumulative=None
+        self._today=None
+        self._lock=threading.RLock()
+        self.gap_detected=False
+
+    def seed_history(self, rows):
+        with self._lock:
+            for row in rows or []:
+                key=row.get("timestamp")
+                if key:
+                    self._bars[key]=dict(row)
+            for key in sorted(self._bars)[:-self.max_bars]:
+                self._bars.pop(key,None)
+
+    def seed_today_volume_baseline(self, rows, today=None):
+        today=today or datetime.now(IST).date()
+        total=0.0
+        found_today=False
+        for row in rows or []:
+            try:
+                if _utc(row["timestamp"]).astimezone(IST).date()==today:
+                    total += float(row["volume"])
+                    found_today=True
+            except (KeyError,TypeError,ValueError):
+                continue
+        with self._lock:
+            self._today=today
+            # If history has no current-session bars, the first live packet
+            # establishes the cumulative-volume baseline instead of adding
+            # the entire day's volume to its first candle.
+            self._last_cumulative=total if found_today else None
+
+    def ingest_tick(self, exchange_timestamp, ltp_paise, cumulative_day_volume):
+        try:
+            ts=_utc(exchange_timestamp)
+            local=ts.astimezone(IST)
+            if local.time()<time(9,15) or local.time()>=time(15,30):
+                return
+            offset=local.hour*60+local.minute-555
+            start=datetime.combine(local.date(),time(9,15),IST)+timedelta(minutes=(offset//5)*5)
+            key=start.astimezone(UTC).isoformat()
+            price=float(ltp_paise)/100.0
+            cumulative=float(cumulative_day_volume)
+            if price<=0 or cumulative<0:
+                return
+        except (TypeError,ValueError,OverflowError):
+            return
+        with self._lock:
+            if self._today != local.date():
+                self._today=local.date()
+                self._last_cumulative=None
+                self._current=None
+            if self._last_cumulative is None:
+                self._last_cumulative=cumulative
+                volume=0.0
+            else:
+                volume=cumulative-self._last_cumulative
+                self._last_cumulative=cumulative
+                if volume<0:
+                    volume=0.0
+                    self.gap_detected=True
+            if self._current and self._current["timestamp"]!=key:
+                self._current["complete"]=True
+                self._bars[self._current["timestamp"]]=dict(self._current)
+                self._current=None
+            if self._current is None:
+                self._current={"timestamp":key,"open":price,"high":price,"low":price,"close":price,"volume":volume,"complete":False}
+            else:
+                self._current["high"]=max(self._current["high"],price)
+                self._current["low"]=min(self._current["low"],price)
+                self._current["close"]=price
+                self._current["volume"]+=volume
+            for old in sorted(self._bars)[:-self.max_bars]:
+                self._bars.pop(old,None)
+
+    def snapshot(self):
+        with self._lock:
+            return [dict(self._bars[k]) for k in sorted(self._bars)][-self.max_bars:]

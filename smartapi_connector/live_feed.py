@@ -8,6 +8,10 @@ import threading
 
 from datetime import datetime, timezone
 
+from smartapi_connector.candle_pipeline import (
+    NiftyFuturesCandlePipeline, fetch_historical_5m, resolve_active_nifty_future,
+)
+
 log = logging.getLogger(__name__)
 
 MASTER_URL = (
@@ -74,6 +78,8 @@ class AngelLiveFeed:
         self.ws = None
         self.thread = None
         self.candles_5m = []
+        self.futures_contract = None
+        self.candle_pipeline = NiftyFuturesCandlePipeline() if self.index == "NIFTY" else None
 
     def start(self):
         if not self.thread or not self.thread.is_alive():
@@ -99,7 +105,8 @@ class AngelLiveFeed:
                 },
                 "atm_strike": self.atm,
                 "oi_acceleration": self.oi_accel,
-                "candles_5m": list(self.candles_5m),
+                "candles_5m": self.candle_pipeline.snapshot() if self.candle_pipeline else list(self.candles_5m),
+                "futures_contract": dict(self.futures_contract) if self.futures_contract else None,
                 "error": self.error,
             }
 
@@ -146,6 +153,12 @@ class AngelLiveFeed:
             response = requests.get(MASTER_URL, timeout=25)
             response.raise_for_status()
             master = response.json()
+
+            if self.index == "NIFTY":
+                self.futures_contract = resolve_active_nifty_future(master)
+                history = fetch_historical_5m(smart, self.futures_contract["token"])
+                self.candle_pipeline.seed_history(history)
+                self.candle_pipeline.seed_today_volume_baseline(history)
 
             today = datetime.now().date()
             rows = []
@@ -202,8 +215,9 @@ class AngelLiveFeed:
                 feed,
             )
 
+            futures_token = self.futures_contract["token"] if self.futures_contract else None
             self.ws.on_open = (
-                lambda ws: self._opened(ws, token, exchange)
+                lambda ws: self._opened(ws, token, exchange, futures_token)
             )
             self.ws.on_data = self._tick
             self.ws.on_error = self._error
@@ -220,16 +234,15 @@ class AngelLiveFeed:
                 self.status = "error"
                 self.error = f"{type(exc).__name__}: {exc}"
 
-    def _opened(self, ws, token, exchange):
+    def _opened(self, ws, token, exchange, futures_token=None):
         with self.lock:
             self.status = "connected"
             self.error = None
 
-        ws.subscribe(
-            "mgo-index-spot",
-            3,
-            [{"exchangeType": exchange, "tokens": [token]}],
-        )
+        groups = [{"exchangeType": exchange, "tokens": [token]}]
+        if futures_token:
+            groups.append({"exchangeType": 2, "tokens": [str(futures_token)]})
+        ws.subscribe("mgo-index-spot-and-futures", 3, groups)
 
     def _tick(self, ws, msg):
         try:
@@ -259,6 +272,13 @@ class AngelLiveFeed:
             ).isoformat(timespec="milliseconds")
 
             with self.lock:
+                if self.candle_pipeline and self.futures_contract and token == str(self.futures_contract["token"]):
+                    exchange_ts = msg.get("exchange_timestamp")
+                    day_volume = msg.get("volume_trade_for_the_day")
+                    if exchange_ts is not None and day_volume is not None:
+                        self.candle_pipeline.ingest_tick(exchange_ts, raw, day_volume)
+                    return
+
                 if token == INDEX[self.index][0]:
                     self.spot = {
                         "token": token,

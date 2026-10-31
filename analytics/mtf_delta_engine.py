@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 from math import isfinite
 from typing import Any
 
 TIMEFRAMES = (5, 15, 30, 60)
 CANDLE_SECONDS = 300
+IST = ZoneInfo("Asia/Kolkata")
 MAX_5M_AGE_SECONDS = 600
 
 
@@ -109,41 +111,32 @@ def normalize_candles(rows):
 
 
 def _resample(candles, minutes):
+    """Aggregate complete bars on the NSE 09:15 IST session grid."""
     count = minutes // 5
     buckets = {}
-
     for candle in candles:
-        epoch = int(candle["timestamp"].timestamp())
-        bucket_start = epoch - (epoch % (minutes * 60))
-        buckets.setdefault(bucket_start, []).append(candle)
-
+        local = candle["timestamp"].astimezone(IST)
+        if local.time() < time(9, 15) or local.time() >= time(15, 30):
+            continue
+        offset = local.hour * 60 + local.minute - 555
+        start_local = datetime.combine(local.date(), time(9, 15), IST)
+        start_local += timedelta(minutes=(offset // minutes) * minutes)
+        start = start_local.astimezone(timezone.utc)
+        buckets.setdefault(start, []).append(candle)
     output = []
-
     for start, group in sorted(buckets.items()):
+        group.sort(key=lambda x: x["timestamp"])
         if len(group) != count:
             continue
-
-        expected = [
-            start + i * CANDLE_SECONDS for i in range(count)
-        ]
-        actual = [
-            int(c["timestamp"].timestamp()) for c in group
-        ]
-
-        if actual != expected:
+        expected = [start + timedelta(seconds=i * CANDLE_SECONDS) for i in range(count)]
+        if [x["timestamp"] for x in group] != expected:
             continue
-
-        output.append({
-            "timestamp": datetime.fromtimestamp(start, timezone.utc),
-            "open": group[0]["open"],
-            "high": max(c["high"] for c in group),
-            "low": min(c["low"] for c in group),
-            "close": group[-1]["close"],
-            "volume": sum(c["volume"] for c in group),
-        })
-
+        output.append({"timestamp": start, "open": group[0]["open"],
+                       "high": max(x["high"] for x in group),
+                       "low": min(x["low"] for x in group),
+                       "close": group[-1]["close"],
+                       "volume": sum(x["volume"] for x in group)})
     return output
-
 
 def _delta(candle):
     spread = candle["high"] - candle["low"]
@@ -268,7 +261,9 @@ def calculate_mtf_delta(candles_5m, now=None):
         return _safe_wait("5-minute OHLCV feed is stale")
 
     for previous, current in zip(candles[-60:-1], candles[-59:]):
-        if (current["timestamp"] - previous["timestamp"]).total_seconds() != 300:
+        a = previous["timestamp"].astimezone(IST)
+        b = current["timestamp"].astimezone(IST)
+        if a.date() == b.date() and a.time() < time(15, 30) and (current["timestamp"] - previous["timestamp"]).total_seconds() != 300:
             return _safe_wait("Gap detected in recent 5-minute candles")
 
     bars15 = _resample(candles, 15)
