@@ -337,6 +337,10 @@ def build_live_telemetry(snapshot):
             "atm_options": options,
         },
         "mtf_matrix": _mtf_payload(snapshot),
+        "chart": {
+            "candles_5m": snapshot.get("candles_5m") or [],
+            "futures_contract": snapshot.get("futures_contract"),
+        },
         "risk": SETTINGS["risk"],
         "layers": layers,
         "reasons": [
