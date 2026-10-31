@@ -106,6 +106,7 @@ class AngelLiveFeed:
                 "atm_strike": self.atm,
                 "oi_acceleration": self.oi_accel,
                 "candles_5m": self.candle_pipeline.snapshot() if self.candle_pipeline else list(self.candles_5m),
+                "current_forming_candle": self.candle_pipeline.forming_snapshot() if self.candle_pipeline else None,
                 "futures_contract": dict(self.futures_contract) if self.futures_contract else None,
                 "error": self.error,
             }
