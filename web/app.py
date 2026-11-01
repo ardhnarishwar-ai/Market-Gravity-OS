@@ -81,7 +81,7 @@ SETTINGS = {
 def _mtf_payload(snapshot):
     candles = (snapshot or {}).get("candles_5m") or []
     try:
-        return calculate_mtf_delta(candles, current_forming_candle=(snapshot or {}).get("current_forming_candle"), cas_reference=(snapshot or {}).get("cas_reference"))
+        return calculate_mtf_delta(candles, current_forming_candle=(snapshot or {}).get("current_forming_candle"), cas_reference=(snapshot or {}).get("cas_reference"), cas_iep=(snapshot or {}).get("cas_iep"))
     except Exception:
         logging.getLogger(__name__).exception(
             "MTF calculation failed"
