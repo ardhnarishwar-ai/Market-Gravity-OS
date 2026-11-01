@@ -293,7 +293,7 @@ footer {
   .mtf-details { grid-template-columns:1fr; }
   .card { border-radius:13px;padding:13px; }
 }
-.chart-card{grid-column:span 12}#price-chart{width:100%;height:286px;min-width:0}#delta-chart{width:100%;height:104px;min-width:0}.delta-heading{display:flex;justify-content:space-between;gap:8px;align-items:center;margin:5px 2px 0}@media(max-width:700px){ #price-chart{height:270px}#delta-chart{height:104px} } .absorption-live{color:#c34c4c!important;animation:absorptionPulse 1s ease-in-out infinite;font-weight:800}@keyframes absorptionPulse{50%{opacity:.42}}</style>
+.cas-card{grid-column:span 12}.cas-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:12px}.cas-cell{border:1px solid var(--line);background:#fffdf8;border-radius:12px;padding:12px;min-width:0}.cas-cell strong{display:block;font-size:20px;margin-top:5px;overflow-wrap:anywhere}.cas-cell small{color:var(--muted);font-size:11px}.cas-meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:10px}.cas-detail{font-size:12px;color:var(--muted)}.cas-value{font-variant-numeric:tabular-nums}@media(max-width:700px){.cas-grid{grid-template-columns:1fr 1fr}.cas-cell strong{font-size:17px}}#price-chart{width:100%;height:286px;min-width:0}#delta-chart{width:100%;height:104px;min-width:0}.delta-heading{display:flex;justify-content:space-between;gap:8px;align-items:center;margin:5px 2px 0}@media(max-width:700px){ #price-chart{height:270px}#delta-chart{height:104px} } .absorption-live{color:#c34c4c!important;animation:absorptionPulse 1s ease-in-out infinite;font-weight:800}@keyframes absorptionPulse{50%{opacity:.42}}</style>
 </head>
 
 <body>
@@ -407,6 +407,39 @@ footer {
   <div id="price-chart" aria-label="5-minute candlestick chart"></div>
   <div class="delta-heading"><span class="label">BAR DELTA · OHLCV CLOSE-LOCATION PROXY</span><span class="sub">Green + / Red −</span></div>
   <div id="delta-chart" aria-label="5-minute bar delta histogram"></div>
+</article>
+
+<article class="card cas-card">
+  <div class="mtf-head">
+    <div>
+      <div class="label">CAS Closing Auction &amp; IEP Monitor</div>
+      <div class="sub">Phase 1 VWAP reference · Phase 2 indicative matching · IST</div>
+    </div>
+    <span class="pill" id="cas-status">WAITING</span>
+  </div>
+  <div class="cas-grid">
+    <div class="cas-cell">
+      <div class="label">VWAP Reference Price</div>
+      <strong class="cas-value" id="cas-reference-price">—</strong>
+      <small id="cas-reference-source">Awaiting CAS reference</small>
+    </div>
+    <div class="cas-cell">
+      <div class="label">±3% Price Band</div>
+      <strong class="cas-value" id="cas-band">—</strong>
+      <small id="cas-band-range">Lower — · Upper —</small>
+    </div>
+    <div class="cas-cell">
+      <div class="label">Indicative Equilibrium Price</div>
+      <strong class="cas-value" id="cas-iep">—</strong>
+      <small id="cas-iep-state">Awaiting aggregated order book</small>
+    </div>
+  </div>
+  <div class="cas-meta">
+    <span class="cas-detail" id="cas-volume">Executable volume: —</span>
+    <span class="cas-detail" id="cas-imbalance">Imbalance: —</span>
+    <span class="cas-detail" id="cas-window">IEP window: 15:20–15:30 IST</span>
+  </div>
+  <div class="notice" id="cas-reason">CAS values will appear when the reference and validated order-book inputs are available. No synthetic IEP is generated.</div>
 </article>
 
 <article class="card mtf">
@@ -607,9 +640,39 @@ function renderLayers(layers) {
   }
 }
 
+function renderCAS(m) {
+  m=m || {};
+  const ref=m.cas_reference || {};
+  const iep=m.cas_iep || {};
+  const reference=Number(ref.vwap_reference_price);
+  const validReference=Number.isFinite(reference) && reference>0;
+  const band=ref.price_band || iep.price_band || {};
+  const lower=Number(band.lower);
+  const upper=Number(band.upper);
+  const hasBand=Number.isFinite(lower) && Number.isFinite(upper);
+  const price=Number(iep.indicative_equilibrium_price);
+  const hasIEP=iep.status==="CALCULATED" && Number.isFinite(price) && price>0;
+  setText("cas-reference-price",validReference?"₹"+reference.toFixed(2):"—");
+  setText("cas-reference-source",ref.source || "Awaiting CAS reference");
+  setText("cas-band",hasBand?"₹"+lower.toFixed(2)+" – ₹"+upper.toFixed(2):(validReference?"±3.00%":"—"));
+  setText("cas-band-range",hasBand?"Lower ₹"+lower.toFixed(2)+" · Upper ₹"+upper.toFixed(2):"Lower — · Upper —");
+  setText("cas-iep",hasIEP?"₹"+price.toFixed(2):"—");
+  setText("cas-iep-state",hasIEP?"Calculated from aggregated order book":(iep.reason || iep.status || "Awaiting aggregated order book"));
+  setText("cas-volume", "Executable volume: "+(iep.maximum_executable_volume ?? "—"));
+  setText("cas-imbalance", "Imbalance: "+(iep.minimum_imbalance_quantity ?? "—"));
+  setText("cas-window","IEP window: "+(iep.window_start || "15:20")+"–"+(iep.window_end_exclusive || "15:30")+" IST");
+  const status=hasIEP?"IEP CALCULATED":(ref.status || iep.status || "WAITING");
+  setText("cas-status",status);
+  const reason=hasIEP
+    ? "IEP selected by maximum executable volume, minimum imbalance, then proximity to VWAP reference."
+    : (iep.reason || (!validReference ? "VWAP reference unavailable; IEP cannot be calculated." : "Reference available. IEP requires validated aggregated bid/ask order-book depth during 15:20–15:30 IST."));
+  setText("cas-reason",reason);
+}
+
 function renderMTF(m) {
   m=m || {};
 
+  renderCAS(m);
   setText("mtf-status",m.status || "WAITING");
   const forming= m.candle_5m_state==="FORMING" && m.delta_5m_running!==null && m.delta_5m_running!==undefined;
   setText("d5",fmt(forming?m.delta_5m_running:m.delta_5m));
