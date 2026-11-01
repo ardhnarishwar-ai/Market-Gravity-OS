@@ -143,18 +143,6 @@ class NiftyFuturesCandlePipeline:
                     self.gap_detected=True
             self._cas_last_ltp = price
 
-            # Capture the final pre-CAS second separately from the CAS VWAP.
-            # Cumulative day volume deltas approximate traded volume between ticks.
-            if time(14,59,59) <= local.time() < time(15,0):
-                self._cas_last_second = {
-                    "timestamp": ts.isoformat(),
-                    "ltp": price,
-                    "volume_delta": volume,
-                    "running_delta": self._forming_delta(self._current),
-                    "absorption": self._forming_absorption(self._current),
-                }
-                self._cas_last_ltp = price
-
             # CAS reference VWAP: sum(LTP * incremental traded volume) / sum(volume).
             if time(15,0) <= local.time() < time(15,15) and volume > 0:
                 self._cas_price_volume += price * volume
@@ -172,6 +160,16 @@ class NiftyFuturesCandlePipeline:
                 self._current["low"]=min(self._current["low"],price)
                 self._current["close"]=price
                 self._current["volume"]+=volume
+            # Capture after updating the active 5m bar so the final-second
+            # delta/absorption includes this tick's price and volume.
+            if time(14,59,59) <= local.time() < time(15,0):
+                self._cas_last_second = {
+                    "timestamp": ts.isoformat(),
+                    "ltp": price,
+                    "volume_delta": volume,
+                    "running_delta": self._forming_delta(self._current),
+                    "absorption": self._forming_absorption(self._current),
+                }
             for old in sorted(self._bars)[:-self.max_bars]:
                 self._bars.pop(old,None)
 
