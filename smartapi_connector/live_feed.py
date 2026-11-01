@@ -8,7 +8,7 @@ import threading
 
 from datetime import datetime, timezone
 
-from smartapi_connector.candle_pipeline import (
+from analytics.cas_iep_engine import calculate_cas_iep_if_in_window\nfrom smartapi_connector.candle_pipeline import (
     NiftyFuturesCandlePipeline, fetch_historical_5m, resolve_active_nifty_future,
 )
 
@@ -81,6 +81,15 @@ class AngelLiveFeed:
         self.futures_contract = None
         self.candle_pipeline = NiftyFuturesCandlePipeline() if self.index == "NIFTY" else None
 
+    def update_cas_orderbook(self, bids, asks, received_at=None):
+        """Accept externally aggregated CAS depth; LTP ticks are not order-book depth."""
+        with self.lock:
+            self._cas_orderbook = {
+                "bids": list(bids or []),
+                "asks": list(asks or []),
+                "received_at": received_at or datetime.now(timezone.utc).isoformat(),
+            }
+
     def start(self):
         if not self.thread or not self.thread.is_alive():
             self.thread = threading.Thread(
@@ -107,6 +116,17 @@ class AngelLiveFeed:
                 "oi_acceleration": self.oi_accel,
                 "candles_5m": self.candle_pipeline.snapshot() if self.candle_pipeline else list(self.candles_5m),
                 "current_forming_candle": self.candle_pipeline.forming_snapshot() if self.candle_pipeline else None,
+                "cas_reference": self.candle_pipeline.cas_reference_snapshot() if self.candle_pipeline else None,
+                "cas_orderbook": dict(self._cas_orderbook) if self._cas_orderbook else None,
+                "cas_iep": calculate_cas_iep_if_in_window(
+                    (self._cas_orderbook or {}).get("bids"),
+                    (self._cas_orderbook or {}).get("asks"),
+                    (self.candle_pipeline.cas_reference_snapshot().get("vwap_reference_price") if self.candle_pipeline else None),
+                ) if self.candle_pipeline and self._cas_orderbook else {
+                    "status": "UNAVAILABLE",
+                    "reason": "No aggregated CAS order-book depth source connected",
+                    "indicative_equilibrium_price": None,
+                },
                 "cas_reference": self.candle_pipeline.cas_reference_snapshot(ltp=self.candle_pipeline.forming_snapshot().get("close") if self.candle_pipeline and self.candle_pipeline.forming_snapshot() else None) if self.candle_pipeline else None,
                 "futures_contract": dict(self.futures_contract) if self.futures_contract else None,
                 "error": self.error,
