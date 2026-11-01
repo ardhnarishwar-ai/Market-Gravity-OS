@@ -73,6 +73,11 @@ class NiftyFuturesCandlePipeline:
         self._today=None
         self._lock=threading.RLock()
         self.gap_detected=False
+        self._cas_date=None
+        self._cas_price_volume=0.0
+        self._cas_volume=0.0
+        self._cas_last_second=None
+        self._cas_last_ltp=None
 
     def seed_history(self, rows):
         with self._lock:
@@ -121,6 +126,12 @@ class NiftyFuturesCandlePipeline:
                 self._today=local.date()
                 self._last_cumulative=None
                 self._current=None
+            if self._cas_date != local.date():
+                self._cas_date=local.date()
+                self._cas_price_volume=0.0
+                self._cas_volume=0.0
+                self._cas_last_second=None
+                self._cas_last_ltp=None
             if self._last_cumulative is None:
                 self._last_cumulative=cumulative
                 volume=0.0
@@ -130,6 +141,24 @@ class NiftyFuturesCandlePipeline:
                 if volume<0:
                     volume=0.0
                     self.gap_detected=True
+            # Capture the final pre-CAS second separately from the CAS VWAP.
+            # Cumulative day volume deltas approximate traded volume between ticks.
+            if time(14,59,59) <= local.time() < time(15,0):
+                self._cas_last_second = {
+                    "timestamp": ts.isoformat(),
+                    "ltp": price,
+                    "volume_delta": volume,
+                    "running_delta": self._forming_delta(self._current),
+                    "absorption": self._forming_absorption(self._current),
+                }
+                self._cas_last_ltp = price
+
+            # CAS reference VWAP: sum(LTP * incremental traded volume) / sum(volume).
+            if time(15,0) <= local.time() < time(15,15) and volume > 0:
+                self._cas_price_volume += price * volume
+                self._cas_volume += volume
+                self._cas_last_ltp = price
+
             if self._current and self._current["timestamp"]!=key:
                 self._current["complete"]=True
                 self._bars[self._current["timestamp"]]=dict(self._current)
@@ -143,6 +172,42 @@ class NiftyFuturesCandlePipeline:
                 self._current["volume"]+=volume
             for old in sorted(self._bars)[:-self.max_bars]:
                 self._bars.pop(old,None)
+
+    @staticmethod
+    def _forming_delta(candle):
+        if not candle:
+            return None
+        spread = candle["high"] - candle["low"]
+        volume = candle["volume"]
+        if spread <= 0 or volume <= 0:
+            return 0.0
+        return round(volume * ((candle["close"] - candle["low"]) / spread - (candle["high"] - candle["close"]) / spread), 2)
+
+    @classmethod
+    def _forming_absorption(cls, candle):
+        if not candle:
+            return "UNAVAILABLE"
+        delta = cls._forming_delta(candle)
+        return "TRAPPED_BUYERS_FORMING" if candle["close"] > candle["open"] and delta is not None and delta < 0 and candle["volume"] > 0 else "NONE"
+
+    def cas_reference_snapshot(self, ltp=None, now=None):
+        now = now or datetime.now(IST)
+        local = now.astimezone(IST)
+        with self._lock:
+            traded_volume = self._cas_volume
+            has_vwap = traded_volume > 0
+            fallback = self._cas_last_ltp or ltp
+            value = self._cas_price_volume / traded_volume if has_vwap else fallback
+            return {
+                "formula": "SUM(LTP_i * DELTA_VOLUME_i) / SUM(DELTA_VOLUME_i)",
+                "window_start": "15:00:00",
+                "window_end_exclusive": "15:15:00",
+                "vwap_reference_price": round(value, 2) if value is not None else None,
+                "traded_volume": round(traded_volume, 2),
+                "source": "CAS_TICK_VWAP" if has_vwap else ("DAY_LTP_FALLBACK" if fallback is not None else "UNAVAILABLE"),
+                "status": "FORMING" if local.time() < time(15,15) else "CLOSED",
+                "last_second_tick": dict(self._cas_last_second) if self._cas_last_second else None,
+            }
 
     def forming_snapshot(self):
         """Return a copy of the active 5m candle and its running OHLCV delta proxy."""
