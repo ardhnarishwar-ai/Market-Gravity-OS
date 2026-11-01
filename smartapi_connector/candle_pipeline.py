@@ -141,6 +141,8 @@ class NiftyFuturesCandlePipeline:
                 if volume<0:
                     volume=0.0
                     self.gap_detected=True
+            self._cas_last_ltp = price
+
             # Capture the final pre-CAS second separately from the CAS VWAP.
             # Cumulative day volume deltas approximate traded volume between ticks.
             if time(14,59,59) <= local.time() < time(15,0):
