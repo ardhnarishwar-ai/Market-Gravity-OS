@@ -234,7 +234,7 @@ def _macd(values):
     }
 
 
-def calculate_mtf_delta(candles_5m, now=None, current_forming_candle=None, cas_reference=None):
+def calculate_mtf_delta(candles_5m, now=None, current_forming_candle=None, cas_reference=None, cas_iep=None):
     forming = None
     if isinstance(current_forming_candle, dict):
         try:
@@ -255,7 +255,7 @@ def calculate_mtf_delta(candles_5m, now=None, current_forming_candle=None, cas_r
 
     def waiting(reason):
         result = _safe_wait(reason)
-        result.update({"delta_5m_running": forming.get("delta") if forming else None, "candle_5m_state": "FORMING" if forming else "CLOSED", "absorption_live": forming.get("absorption", "NONE") if forming else "NONE", "current_forming_candle": forming, "cas_reference": cas_reference})
+        result.update({"delta_5m_running": forming.get("delta") if forming else None, "candle_5m_state": "FORMING" if forming else "CLOSED", "absorption_live": forming.get("absorption", "NONE") if forming else "NONE", "current_forming_candle": forming, "cas_reference": cas_reference, "cas_iep": cas_iep})
         return result
 
     candles = normalize_candles(candles_5m)
