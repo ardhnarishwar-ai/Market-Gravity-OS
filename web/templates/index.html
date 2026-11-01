@@ -647,8 +647,8 @@ function renderCAS(m) {
   const reference=Number(ref.vwap_reference_price);
   const validReference=Number.isFinite(reference) && reference>0;
   const band=ref.price_band || iep.price_band || {};
-  const lower=Number(band.lower);
-  const upper=Number(band.upper);
+  const lower=Number.isFinite(Number(band.lower)) ? Number(band.lower) : (validReference ? reference*0.97 : NaN);
+  const upper=Number.isFinite(Number(band.upper)) ? Number(band.upper) : (validReference ? reference*1.03 : NaN);
   const hasBand=Number.isFinite(lower) && Number.isFinite(upper);
   const price=Number(iep.indicative_equilibrium_price);
   const hasIEP=iep.status==="CALCULATED" && Number.isFinite(price) && price>0;
