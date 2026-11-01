@@ -81,6 +81,7 @@ class AngelLiveFeed:
         self.candles_5m = []
         self.futures_contract = None
         self.candle_pipeline = NiftyFuturesCandlePipeline() if self.index == "NIFTY" else None
+        self._cas_orderbook = None  # CAS depth is unavailable until a provider supplies it.
 
     def update_cas_orderbook(self, bids, asks, received_at=None):
         """Accept externally aggregated CAS depth; LTP ticks are not order-book depth."""
