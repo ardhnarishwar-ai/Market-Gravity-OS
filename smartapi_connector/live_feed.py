@@ -8,7 +8,8 @@ import threading
 
 from datetime import datetime, timezone
 
-from analytics.cas_iep_engine import calculate_cas_iep_if_in_window\nfrom smartapi_connector.candle_pipeline import (
+from analytics.cas_iep_engine import calculate_cas_iep_if_in_window
+from smartapi_connector.candle_pipeline import (
     NiftyFuturesCandlePipeline, fetch_historical_5m, resolve_active_nifty_future,
 )
 
