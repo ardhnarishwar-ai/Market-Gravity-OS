@@ -320,7 +320,7 @@ footer {
   <div class="gauge-wrap">
     <svg class="gauge" viewBox="0 0 260 160">
       <defs>
-        <linearGradient id="gaugeZoneGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+        <linearGradient id="gaugeZoneGradient" gradientUnits="userSpaceOnUse" x1="28" y1="135" x2="232" y2="135">
           <stop offset="0%" stop-color="#ef5350"/>
           <stop offset="48%" stop-color="#ef5350"/>
           <stop offset="52%" stop-color="#66bb6a"/>
@@ -333,7 +333,7 @@ footer {
 
       <path id="gaugeProgress"
         d="M28 135 A102 102 0 0 1 232 135"
-        fill="none" stroke="url(#gaugeZoneGradient)" stroke-width="15"
+        fill="none" stroke="url(#gaugeZoneGradient)" stroke-width="15" pathLength="320"
         stroke-linecap="round" stroke-dasharray="320"
         stroke-dashoffset="320"/>
 
