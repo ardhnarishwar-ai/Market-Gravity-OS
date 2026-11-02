@@ -251,23 +251,42 @@ class AngelLiveFeed:
                 return
 
             data = auth.get("data") or {}
-            jwt = data.get("jwtToken")
-            feed = data.get("feedToken") or smart.getfeedToken()
 
-            if not jwt or not feed:
-                raise RuntimeError(
-                    "Login response lacks feed tokens"
-                )
+            # WebSocket V2 requires the JWT and the feed token from THIS login
+            # response. Do not silently fall back to SmartConnect's cached token.
+            jwt = data.get("jwtToken")
+            feed = data.get("feedToken")
+            client_code = creds["client_code"]  # preserve exact case from .env
+
+            if not isinstance(jwt, str) or not jwt.strip():
+                raise RuntimeError("Login response is missing a valid jwtToken")
+            if not isinstance(feed, str) or not feed.strip():
+                raise RuntimeError("Login response is missing a valid feedToken")
+            if not isinstance(client_code, str) or not client_code.strip():
+                raise RuntimeError("Angel One client code is empty")
+
+            jwt = jwt.strip()
+            feed = feed.strip()
+            client_code = client_code.strip()
+
+            # Log presence/length only; never expose credential/token values.
+            log.info(
+                "SmartAPI WS auth material: jwt_present=%s jwt_len=%d "
+                "feed_present=%s feed_len=%d client_code_present=%s "
+                "client_code_len=%d",
+                bool(jwt), len(jwt), bool(feed), len(feed),
+                bool(client_code), len(client_code),
+            )
 
             # Connect the stable index token first. Instrument-master loading,
             # JSON parsing and historical REST work run independently and cannot
             # hold the first spot subscription hostage.
             token, exchange, _ = INDEX[self.index]
             self.ws = SmartWebSocketV2(
-                jwt,
-                creds["api_key"],
-                creds["client_code"],
-                feed,
+                auth_token=jwt,
+                api_key=creds["api_key"],
+                client_code=client_code,
+                feed_token=feed,
             )
             self._ws_open_event = threading.Event()
             self.ws.on_open = lambda ws: self._opened(ws, token, exchange)
