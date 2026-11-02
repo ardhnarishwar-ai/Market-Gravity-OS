@@ -95,19 +95,24 @@ def _stacked_imbalance(footprint, ratio=3.0, min_volume=1.0):
         sell = bid >= max(ask * ratio, min_volume)
         levels.append({"price": price, "buy": buy, "sell": sell, "bid": bid, "ask": ask})
     levels.sort(key=lambda x: x["price"])
+    positive_gaps = [levels[i]["price"] - levels[i - 1]["price"] for i in range(1, len(levels)) if levels[i]["price"] > levels[i - 1]["price"]]
+    tick_size = min(positive_gaps) if positive_gaps else 0.05
     def stacks(flag):
         result, current = [], []
+        previous = None
         for level in levels:
-            if level[flag]:
+            adjacent = previous is None or level["price"] - previous <= tick_size * 1.5
+            if level[flag] and adjacent:
                 current.append(level["price"])
             else:
                 if len(current) >= 3:
                     result.append(current)
-                current = []
+                current = [level["price"]] if level[flag] else []
+            previous = level["price"]
         if len(current) >= 3:
             result.append(current)
         return result
-    return {"status": "CALCULATED", "source": "CLASSIFIED_BID_ASK_VOLUME", "ratio": ratio, "buy_stacks": stacks("buy"), "sell_stacks": stacks("sell")}
+    return {"status": "CALCULATED", "source": "CLASSIFIED_BID_ASK_VOLUME", "ratio": ratio, "tick_size_inferred": tick_size, "buy_stacks": stacks("buy"), "sell_stacks": stacks("sell")}
 
 
 def _absorption(footprint):
@@ -124,7 +129,7 @@ def _absorption(footprint):
     buy_absorb = sum(ask for _, _, ask, dp in rows if ask > 0 and dp <= 0)
     sell_absorb = sum(bid for _, bid, _, dp in rows if bid > 0 and dp >= 0)
     signal = "BUYER_ABSORPTION" if buy_absorb > sell_absorb * 1.5 else "SELLER_ABSORPTION" if sell_absorb > buy_absorb * 1.5 else "BALANCED"
-    return {"status": "CALCULATED", "source": "CLASSIFIED_BID_ASK_WITH_PRICE_RESPONSE", "signal": signal, "aggressive_buy_absorbed": round(buy_absorb, 2), "aggressive_sell_absorbed": round(sell_absorb, 2)}
+    return {"status": "CALCULATED", "source": "CLASSIFIED_BID_ASK_WITH_PRICE_RESPONSE", "signal": signal, "footprint_delta": round(sum(ask - bid for _, bid, ask, _ in rows), 2), "aggressive_buy_absorbed": round(buy_absorb, 2), "aggressive_sell_absorbed": round(sell_absorb, 2)}
 
 
 def calculate_auction_metrics(candles, footprint=None, now=None, bin_size=5.0):
