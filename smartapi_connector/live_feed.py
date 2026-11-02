@@ -222,6 +222,7 @@ class AngelLiveFeed:
                     "symbol": str(x.get("symbol", "")),
                     "strike": x["_strike"],
                     "type": str(x.get("symbol", ""))[-2:],
+                    "expiry": x["_expiry"].isoformat(),
                     "exchange": (
                         2 if x.get("exch_seg") == "NFO" else 4
                     ),
@@ -349,6 +350,8 @@ class AngelLiveFeed:
                     "option_type": contract["type"],
                     "ltp": ltp,
                     "open_interest": oi,
+                    "iv": msg.get("implied_volatility", msg.get("iv")),
+                    "expiry": contract.get("expiry"),
                     "received_at": stamp,
                 }
 
