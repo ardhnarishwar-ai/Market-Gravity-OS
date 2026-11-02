@@ -191,7 +191,22 @@ class AngelLiveFeed:
 
             if self.index == "NIFTY":
                 self.futures_contract = resolve_active_nifty_future(master)
-                history = fetch_historical_5m(smart, self.futures_contract["token"])
+                # Historical REST data is optional: a rate limit must not prevent
+                # the independent live WebSocket feed from starting.
+                history = []
+                try:
+                    history = fetch_historical_5m(
+                        smart,
+                        self.futures_contract["token"],
+                    )
+                    log.info("Historical candles loaded: %d", len(history))
+                except Exception as exc:
+                    log.warning(
+                        "Historical candle fetch unavailable; "
+                        "continuing with live WebSocket. Error: %s",
+                        exc,
+                    )
+
                 self.candle_pipeline.seed_history(history)
                 self.candle_pipeline.seed_today_volume_baseline(history)
 
