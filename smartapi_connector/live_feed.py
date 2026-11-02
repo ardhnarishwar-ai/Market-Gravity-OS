@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import threading
+from pathlib import Path
 
 from datetime import datetime, timezone
 
@@ -58,6 +59,79 @@ def credentials():
 
 def credentials_present():
     return all(credentials().values())
+
+
+def load_scrip_master(requests_module):
+    """Load today's instrument master from disk; download only when stale/missing.
+
+    If refresh fails, a previous cache is still usable. With no cache, return an
+    empty list so the known index spot token can still start the WebSocket.
+    """
+    cache_path = Path(__file__).resolve().parents[1] / "scrip_master.json"
+    today = datetime.now().astimezone().date()
+
+    if cache_path.is_file():
+        try:
+            cached_day = datetime.fromtimestamp(
+                cache_path.stat().st_mtime
+            ).date()
+            if cached_day == today:
+                with cache_path.open("r", encoding="utf-8") as handle:
+                    cached = json.load(handle)
+                if isinstance(cached, list) and cached:
+                    log.info("Using today's cached scrip master: %s", cache_path)
+                    return cached
+                log.warning("Today's scrip master cache is empty/invalid; refreshing")
+        except Exception as exc:
+            log.warning("Could not read scrip master cache: %s", exc)
+
+    temp_path = cache_path.with_suffix(".json.tmp")
+    try:
+        log.info("Refreshing scrip master cache from Angel One")
+        with requests_module.get(
+            MASTER_URL,
+            timeout=(5, 15),
+            stream=True,
+        ) as response:
+            response.raise_for_status()
+            with temp_path.open("wb") as handle:
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    if chunk:
+                        handle.write(chunk)
+
+        # Validate before replacing a known-good cache.
+        with temp_path.open("r", encoding="utf-8") as handle:
+            downloaded = json.load(handle)
+        if not isinstance(downloaded, list) or not downloaded:
+            raise ValueError("Downloaded scrip master is empty or invalid")
+
+        temp_path.replace(cache_path)
+        log.info("Scrip master cached locally: %s", cache_path)
+        return downloaded
+    except Exception as exc:
+        log.warning("Scrip master refresh failed: %s", exc)
+        try:
+            temp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+        # A stale cache is preferable to blocking startup on a mobile network.
+        if cache_path.is_file():
+            try:
+                with cache_path.open("r", encoding="utf-8") as handle:
+                    cached = json.load(handle)
+                if isinstance(cached, list) and cached:
+                    log.warning("Using stale scrip master cache")
+                    return cached
+            except Exception as cache_exc:
+                log.warning("Stale scrip master cache is unreadable: %s", cache_exc)
+
+        log.warning(
+            "No scrip master available; starting index-spot WebSocket only "
+            "with known token %s",
+            INDEX.get("NIFTY", ("99926000",))[0],
+        )
+        return []
 
 
 class AngelLiveFeed:
@@ -185,39 +259,46 @@ class AngelLiveFeed:
                     "Login response lacks feed tokens"
                 )
 
-            response = requests.get(MASTER_URL, timeout=25)
-            response.raise_for_status()
-            master = response.json()
+            master = load_scrip_master(requests)
 
-            if self.index == "NIFTY":
-                self.futures_contract = resolve_active_nifty_future(master)
-                # Historical REST data is optional: a rate limit must not prevent
-                # the independent live WebSocket feed from starting.
-                history = []
+            if self.index == "NIFTY" and master:
                 try:
-                    history = fetch_historical_5m(
-                        smart,
-                        self.futures_contract["token"],
-                    )
-                    log.info("Historical candles loaded: %d", len(history))
+                    self.futures_contract = resolve_active_nifty_future(master)
                 except Exception as exc:
-                    log.warning(
-                        "Historical candle fetch unavailable; "
-                        "continuing with live WebSocket. Error: %s",
-                        exc,
-                    )
+                    # Never invent a monthly futures token. Spot can still stream
+                    # using the stable index token while futures data is unavailable.
+                    log.warning("NIFTY futures contract unavailable: %s", exc)
 
-                self.candle_pipeline.seed_history(history)
-                self.candle_pipeline.seed_today_volume_baseline(history)
+                if self.futures_contract:
+                    # Historical REST data is optional: a rate limit must not prevent
+                    # the independent live WebSocket feed from starting.
+                    history = []
+                    try:
+                        history = fetch_historical_5m(
+                            smart,
+                            self.futures_contract["token"],
+                        )
+                        log.info("Historical candles loaded: %d", len(history))
+                    except Exception as exc:
+                        log.warning(
+                            "Historical candle fetch unavailable; "
+                            "continuing with live WebSocket. Error: %s",
+                            exc,
+                        )
+
+                    self.candle_pipeline.seed_history(history)
+                    self.candle_pipeline.seed_today_volume_baseline(history)
 
             today = datetime.now().date()
             rows = []
 
             for row in master if isinstance(master, list) else []:
+                if not isinstance(row, dict):
+                    continue
                 if (
                     row.get("exch_seg") not in ("NFO", "BFO")
                     or row.get("instrumenttype") != "OPTIDX"
-                    or row.get("name", "").upper() != self.index
+                    or str(row.get("name", "")).upper() != self.index
                 ):
                     continue
 
@@ -236,26 +317,26 @@ class AngelLiveFeed:
                         "_strike": strike,
                     })
 
-            if not rows:
-                raise RuntimeError(
-                    "No current index options in instrument master"
-                )
-
-            expiry = min(x["_expiry"] for x in rows)
-
-            self.contracts = {
-                str(x["token"]): {
-                    "symbol": str(x.get("symbol", "")),
-                    "strike": x["_strike"],
-                    "type": str(x.get("symbol", ""))[-2:],
-                    "expiry": x["_expiry"].isoformat(),
-                    "exchange": (
-                        2 if x.get("exch_seg") == "NFO" else 4
-                    ),
+            if rows:
+                expiry = min(x["_expiry"] for x in rows)
+                self.contracts = {
+                    str(x["token"]): {
+                        "symbol": str(x.get("symbol", "")),
+                        "strike": x["_strike"],
+                        "type": str(x.get("symbol", ""))[-2:],
+                        "expiry": x["_expiry"].isoformat(),
+                        "exchange": (
+                            2 if x.get("exch_seg") == "NFO" else 4
+                        ),
+                    }
+                    for x in rows
+                    if x["_expiry"] == expiry
                 }
-                for x in rows
-                if x["_expiry"] == expiry
-            }
+            else:
+                log.warning(
+                    "No option contracts loaded; starting index spot "
+                    "and available futures subscriptions only"
+                )
 
             token, exchange, _ = INDEX[self.index]
 
