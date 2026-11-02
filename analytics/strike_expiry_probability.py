@@ -37,6 +37,12 @@ def _aware(value):
 
 
 def _expiry_close(expiry):
+    if isinstance(expiry, str) and len(expiry) == 10:
+        try:
+            from datetime import date
+            return datetime.combine(date.fromisoformat(expiry), time(15, 30), IST)
+        except ValueError:
+            return None
     dt = _aware(expiry)
     if dt is None:
         return None
