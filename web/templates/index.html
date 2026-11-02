@@ -442,6 +442,49 @@ footer {
   <div class="notice" id="cas-reason">CAS values will appear when the reference and validated order-book inputs are available. No synthetic IEP is generated.</div>
 </article>
 
+<article class="card cas-card" id="auction-card">
+  <div class="mtf-head">
+    <div>
+      <div class="label">Order Flow &amp; Auction Structure</div>
+      <div class="sub">NIFTY Futures · session structure · volume profile · footprint quality-aware</div>
+    </div>
+    <span class="pill" id="auction-status">WAITING</span>
+  </div>
+  <div class="cas-grid">
+    <div class="cas-cell">
+      <div class="label">Overnight Halfback</div>
+      <strong class="cas-value" id="auction-halfback">—</strong>
+      <small id="auction-halfback-range">Previous session H/L unavailable</small>
+    </div>
+    <div class="cas-cell">
+      <div class="label">Continuous POC / Iron POC</div>
+      <strong class="cas-value" id="auction-poc">—</strong>
+      <small id="auction-profile-source">Awaiting volume profile</small>
+    </div>
+    <div class="cas-cell">
+      <div class="label">Stacked Imbalance</div>
+      <strong class="cas-value" id="auction-stacks">UNAVAILABLE</strong>
+      <small id="auction-stack-source">Requires classified bid/ask volume</small>
+    </div>
+    <div class="cas-cell">
+      <div class="label">Buyer / Seller Absorption</div>
+      <strong class="cas-value" id="auction-absorption">UNAVAILABLE</strong>
+      <small id="auction-absorption-source">Requires classified trade flow</small>
+    </div>
+    <div class="cas-cell">
+      <div class="label">HVN / LVN Nodes</div>
+      <strong class="cas-value" id="auction-nodes">—</strong>
+      <small id="auction-node-source">OHLCV profile proxy</small>
+    </div>
+    <div class="cas-cell">
+      <div class="label">LVN Vacuum Corridors</div>
+      <strong class="cas-value" id="auction-corridors">—</strong>
+      <small id="auction-corridor-source">Low-volume transitions</small>
+    </div>
+  </div>
+  <div class="notice" id="auction-quality">Waiting for NIFTY Futures history and classified footprint feed.</div>
+</article>
+
 <article class="card mtf">
   <div class="mtf-head">
     <div>
@@ -669,6 +712,31 @@ function renderCAS(m) {
   setText("cas-reason",reason);
 }
 
+function renderAuction(a) {
+  a=a || {};
+  const half=a.overnight_halfback || {};
+  const profile=a.continuous_volume_profile || {};
+  const stacks=a.stacked_imbalance || {};
+  const absorption=a.footprint_delta_absorption || {};
+  const corridors=a.lvn_vacuum_corridors || {};
+  setText("auction-status",a.status || "WAITING");
+  setText("auction-halfback",half.midpoint!==null && half.midpoint!==undefined ? "₹"+fmt(half.midpoint) : "—");
+  setText("auction-halfback-range",half.previous_session_high!==null && half.previous_session_low!==null ? "High ₹"+fmt(half.previous_session_high)+" · Low ₹"+fmt(half.previous_session_low) : "Previous session H/L unavailable");
+  setText("auction-poc",profile.poc!==null && profile.poc!==undefined ? "₹"+fmt(profile.poc) : "—");
+  setText("auction-profile-source",profile.source || "Awaiting volume profile");
+  const buy=(stacks.buy_stacks || []).length, sell=(stacks.sell_stacks || []).length;
+  setText("auction-stacks",stacks.status==="CALCULATED" ? "Buy "+buy+" · Sell "+sell : "UNAVAILABLE");
+  setText("auction-stack-source",stacks.source || "Requires classified bid/ask volume");
+  setText("auction-absorption",absorption.signal || "UNAVAILABLE");
+  setText("auction-absorption-source",absorption.source || "Requires classified trade flow");
+  setText("auction-nodes","HVN "+(profile.hvn || []).length+" · LVN "+(profile.lvn || []).length);
+  setText("auction-node-source",profile.source || "OHLCV profile proxy");
+  setText("auction-corridors",(corridors.corridors || []).length);
+  setText("auction-corridor-source",corridors.source || "Low-volume transitions");
+  const q=a.data_quality || {};
+  setText("auction-quality",(q.candles ?? 0)+" candles · "+(q.sessions ?? 0)+" sessions · "+(q.footprint_prints ?? 0)+" classified footprint levels. "+(q.note || a.reason || ""));
+}
+
 function renderMTF(m) {
   m=m || {};
 
@@ -802,6 +870,7 @@ async function pollTelemetry() {
 
     renderLayers(data.layers);
     renderMTF(data.mtf_matrix);
+    renderAuction(data.auction_metrics);
     renderPriceChart(data.mtf_matrix,data.chart?.candles_5m,data.mode?.startsWith("LIVE"));
 
   } catch(error) {
