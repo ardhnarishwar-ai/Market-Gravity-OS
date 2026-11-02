@@ -35,6 +35,7 @@ from smartapi_connector.live_feed import (
 )
 from analytics.mtf_delta_engine import calculate_mtf_delta
 from analytics.strike_expiry_probability import calculate_nifty_strike_expiry_probabilities
+from analytics.orderflow_auction_engine import calculate_auction_metrics
 
 app = Flask(
     __name__,
@@ -225,6 +226,7 @@ def build_demo_telemetry():
             "oi_acceleration": round(oi_acceleration),
         },
         "mtf_matrix": _mtf_payload({}),
+        "auction_metrics": {"status": "WAITING", "instrument": "NIFTY_FUTURES", "reason": "Real futures OHLCV history required; classified footprint feed not connected."},
         "strike_expiry_probability": {"status": "WAITING", "index": "NIFTY", "reason": "Live NIFTY spot, timestamped 30m OHLCV and option IV/realized volatility are required."},
         "risk": SETTINGS["risk"],
         "layers": layers,
@@ -353,6 +355,7 @@ def build_live_telemetry(snapshot):
             "atm_options": options,
         },
         "mtf_matrix": _mtf_payload(snapshot),
+        "auction_metrics": calculate_auction_metrics(snapshot.get("candles_5m") or [], footprint=snapshot.get("footprint") or []),
         "strike_expiry_probability": strike_expiry_probability,
         "chart": {
             "candles_5m": snapshot.get("candles_5m") or [],
