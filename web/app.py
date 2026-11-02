@@ -34,6 +34,7 @@ from smartapi_connector.live_feed import (
     credentials_present,
 )
 from analytics.mtf_delta_engine import calculate_mtf_delta
+from analytics.strike_expiry_probability import calculate_nifty_strike_expiry_probabilities
 
 app = Flask(
     __name__,
@@ -224,6 +225,7 @@ def build_demo_telemetry():
             "oi_acceleration": round(oi_acceleration),
         },
         "mtf_matrix": _mtf_payload({}),
+        "strike_expiry_probability": {"status": "WAITING", "index": "NIFTY", "reason": "Live NIFTY spot, timestamped 30m OHLCV and option IV/realized volatility are required."},
         "risk": SETTINGS["risk"],
         "layers": layers,
         "reasons": signal.reasons,
@@ -274,6 +276,20 @@ def build_live_telemetry(snapshot):
     )
 
     signal = evaluate_signal(engine_input, SETTINGS)
+
+    option_rows = list(options.values())
+    expiries = [row.get("expiry") for row in option_rows if row.get("expiry")]
+    expiry = min(expiries) if expiries else None
+    strike_expiry_probability = calculate_nifty_strike_expiry_probabilities(
+        spot=spot_price,
+        candles_5m=snapshot.get("candles_5m") or [],
+        options=option_rows,
+        expiry=expiry,
+    ) if expiry else {
+        "status": "WAITING",
+        "index": "NIFTY",
+        "reason": "Nearest NIFTY option expiry metadata is unavailable.",
+    }
 
     labels = [
         ("1_dynamic_stretch", "Dynamic ATR Z-score"),
@@ -337,6 +353,7 @@ def build_live_telemetry(snapshot):
             "atm_options": options,
         },
         "mtf_matrix": _mtf_payload(snapshot),
+        "strike_expiry_probability": strike_expiry_probability,
         "chart": {
             "candles_5m": snapshot.get("candles_5m") or [],
             "futures_contract": snapshot.get("futures_contract"),
