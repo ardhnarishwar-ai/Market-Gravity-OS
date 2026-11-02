@@ -2,7 +2,10 @@
 from __future__ import annotations
 from datetime import datetime, timedelta, time, timezone
 from zoneinfo import ZoneInfo
+import logging
 import threading
+
+log = logging.getLogger(__name__)
 
 IST = ZoneInfo("Asia/Kolkata")
 UTC = timezone.utc
@@ -36,13 +39,28 @@ def resolve_active_nifty_future(master_rows, today=None):
 def fetch_historical_5m(smart_api, token, days=95):
     end = datetime.now(IST)
     start = end - timedelta(days=min(max(int(days), 1), 95))
-    response = smart_api.getCandleData({
-        "exchange":"NFO","symboltoken":str(token),"interval":"FIVE_MINUTE",
-        "fromdate":start.strftime("%Y-%m-%d %H:%M"),"todate":end.strftime("%Y-%m-%d %H:%M")
-    })
+    try:
+        response = smart_api.getCandleData({
+            "exchange":"NFO","symboltoken":str(token),"interval":"FIVE_MINUTE",
+            "fromdate":start.strftime("%Y-%m-%d %H:%M"),"todate":end.strftime("%Y-%m-%d %H:%M")
+        })
+    except Exception as exc:
+        # Angel SmartAPI may return a DataException when its REST rate limit
+        # is exceeded (sometimes with a non-JSON "Access denied" body).
+        message = str(exc).lower()
+        if "access denied" in message or "rate" in message or "too many request" in message:
+            log.warning("SmartAPI historical candles rate-limited; skipping REST history: %s", exc)
+            return []
+        raise
+
     if not isinstance(response, dict) or not response.get("status"):
         message = response.get("message", "Historical candle request failed") if isinstance(response, dict) else "Invalid historical response"
+        lowered = str(message).lower()
+        if "access denied" in lowered or "rate" in lowered or "too many request" in lowered:
+            log.warning("SmartAPI historical candles rate-limited; skipping REST history: %s", message)
+            return []
         raise RuntimeError(message)
+
     now = datetime.now(UTC)
     by_time = {}
     for row in response.get("data") or []:
