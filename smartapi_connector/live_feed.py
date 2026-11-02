@@ -259,98 +259,18 @@ class AngelLiveFeed:
                     "Login response lacks feed tokens"
                 )
 
-            master = load_scrip_master(requests)
-
-            if self.index == "NIFTY" and master:
-                try:
-                    self.futures_contract = resolve_active_nifty_future(master)
-                except Exception as exc:
-                    # Never invent a monthly futures token. Spot can still stream
-                    # using the stable index token while futures data is unavailable.
-                    log.warning("NIFTY futures contract unavailable: %s", exc)
-
-                if self.futures_contract:
-                    # Historical REST data is optional: a rate limit must not prevent
-                    # the independent live WebSocket feed from starting.
-                    history = []
-                    try:
-                        history = fetch_historical_5m(
-                            smart,
-                            self.futures_contract["token"],
-                        )
-                        log.info("Historical candles loaded: %d", len(history))
-                    except Exception as exc:
-                        log.warning(
-                            "Historical candle fetch unavailable; "
-                            "continuing with live WebSocket. Error: %s",
-                            exc,
-                        )
-
-                    self.candle_pipeline.seed_history(history)
-                    self.candle_pipeline.seed_today_volume_baseline(history)
-
-            today = datetime.now().date()
-            rows = []
-
-            for row in master if isinstance(master, list) else []:
-                if not isinstance(row, dict):
-                    continue
-                if (
-                    row.get("exch_seg") not in ("NFO", "BFO")
-                    or row.get("instrumenttype") != "OPTIDX"
-                    or str(row.get("name", "")).upper() != self.index
-                ):
-                    continue
-
-                try:
-                    expiry = datetime.strptime(
-                        row["expiry"], "%d%b%Y"
-                    ).date()
-                    strike = float(row["strike"]) / 100
-                except (KeyError, TypeError, ValueError):
-                    continue
-
-                if expiry >= today:
-                    rows.append({
-                        **row,
-                        "_expiry": expiry,
-                        "_strike": strike,
-                    })
-
-            if rows:
-                expiry = min(x["_expiry"] for x in rows)
-                self.contracts = {
-                    str(x["token"]): {
-                        "symbol": str(x.get("symbol", "")),
-                        "strike": x["_strike"],
-                        "type": str(x.get("symbol", ""))[-2:],
-                        "expiry": x["_expiry"].isoformat(),
-                        "exchange": (
-                            2 if x.get("exch_seg") == "NFO" else 4
-                        ),
-                    }
-                    for x in rows
-                    if x["_expiry"] == expiry
-                }
-            else:
-                log.warning(
-                    "No option contracts loaded; starting index spot "
-                    "and available futures subscriptions only"
-                )
-
+            # Connect the stable index token first. Instrument-master loading,
+            # JSON parsing and historical REST work run independently and cannot
+            # hold the first spot subscription hostage.
             token, exchange, _ = INDEX[self.index]
-
             self.ws = SmartWebSocketV2(
                 jwt,
                 creds["api_key"],
                 creds["client_code"],
                 feed,
             )
-
-            futures_token = self.futures_contract["token"] if self.futures_contract else None
-            self.ws.on_open = (
-                lambda ws: self._opened(ws, token, exchange, futures_token)
-            )
+            self._ws_open_event = threading.Event()
+            self.ws.on_open = lambda ws: self._opened(ws, token, exchange)
             self.ws.on_data = self._tick
             self.ws.on_error = self._error
             self.ws.on_close = self._closed
@@ -358,6 +278,17 @@ class AngelLiveFeed:
             with self.lock:
                 self.status = "connecting"
 
+            threading.Thread(
+                target=self._load_instruments_background,
+                args=(requests, smart),
+                daemon=True,
+                name="angel-scrip-master-loader",
+            ).start()
+
+            log.info(
+                "Starting SmartAPI WebSocket immediately with %s spot token",
+                token,
+            )
             self.ws.connect()
 
         except Exception as exc:
@@ -370,11 +301,97 @@ class AngelLiveFeed:
         with self.lock:
             self.status = "connected"
             self.error = None
+        if hasattr(self, "_ws_open_event"):
+            self._ws_open_event.set()
 
-        groups = [{"exchangeType": exchange, "tokens": [token]}]
-        if futures_token:
-            groups.append({"exchangeType": 2, "tokens": [str(futures_token)]})
-        ws.subscribe("mgo-index-spot-and-futures", 3, groups)
+        # Do not wait for scrip-master download: subscribe to index spot now.
+        ws.subscribe(
+            "mgo-index-spot",
+            3,
+            [{"exchangeType": exchange, "tokens": [str(token)]}],
+        )
+
+    def _load_instruments_background(self, requests_module, smart):
+        """Load contracts after spot WebSocket startup, then add optional streams."""
+        try:
+            master = load_scrip_master(requests_module)
+            today = datetime.now().date()
+
+            if self.index == "NIFTY" and master:
+                try:
+                    self.futures_contract = resolve_active_nifty_future(master)
+                except Exception as exc:
+                    log.warning("NIFTY futures contract unavailable: %s", exc)
+
+                if self.futures_contract:
+                    history = []
+                    try:
+                        history = fetch_historical_5m(
+                            smart,
+                            self.futures_contract["token"],
+                        )
+                        log.info("Historical candles loaded: %d", len(history))
+                    except Exception as exc:
+                        log.warning("Historical candle fetch skipped: %s", exc)
+                    self.candle_pipeline.seed_history(history)
+                    self.candle_pipeline.seed_today_volume_baseline(history)
+
+            rows = []
+            for row in master if isinstance(master, list) else []:
+                if not isinstance(row, dict):
+                    continue
+                if (
+                    row.get("exch_seg") not in ("NFO", "BFO")
+                    or row.get("instrumenttype") != "OPTIDX"
+                    or str(row.get("name", "")).upper() != self.index
+                ):
+                    continue
+                try:
+                    expiry = datetime.strptime(row["expiry"], "%d%b%Y").date()
+                    strike = float(row["strike"]) / 100
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if expiry >= today:
+                    rows.append({**row, "_expiry": expiry, "_strike": strike})
+
+            if rows:
+                expiry = min(x["_expiry"] for x in rows)
+                with self.lock:
+                    self.contracts = {
+                        str(x["token"]): {
+                            "symbol": str(x.get("symbol", "")),
+                            "strike": x["_strike"],
+                            "type": str(x.get("symbol", ""))[-2:],
+                            "expiry": x["_expiry"].isoformat(),
+                            "exchange": 2 if x.get("exch_seg") == "NFO" else 4,
+                        }
+                        for x in rows if x["_expiry"] == expiry
+                    }
+            else:
+                log.warning("No option contracts loaded; spot stream remains active")
+
+            # Wait briefly for on_open before adding optional futures/options.
+            if not self._ws_open_event.wait(timeout=30):
+                log.warning("WebSocket did not open; instrument loader will not subscribe")
+                return
+
+            if self.futures_contract and self.ws:
+                try:
+                    self.ws.subscribe(
+                        "mgo-index-futures",
+                        3,
+                        [{"exchangeType": 2, "tokens": [str(self.futures_contract["token"])]}],
+                    )
+                except Exception as exc:
+                    log.warning("NIFTY futures subscription unavailable: %s", exc)
+
+            with self.lock:
+                atm = self.atm
+            if atm is not None and self.ws:
+                self._subscribe_atm(self.ws, atm)
+
+        except Exception:
+            log.exception("Background scrip-master load failed; spot stream remains independent")
 
     def _tick(self, ws, msg):
         try:
