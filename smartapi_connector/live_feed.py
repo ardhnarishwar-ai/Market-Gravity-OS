@@ -82,6 +82,16 @@ class AngelLiveFeed:
         self.futures_contract = None
         self.candle_pipeline = NiftyFuturesCandlePipeline() if self.index == "NIFTY" else None
         self._cas_orderbook = None  # CAS depth is unavailable until a provider supplies it.
+        self._footprint_levels = []  # Populated only by a classified trade/depth adapter.
+
+    def update_footprint_levels(self, levels):
+        """Store classified per-price bid/ask volume from an external feed adapter."""
+        clean = []
+        for row in levels or []:
+            if isinstance(row, dict):
+                clean.append(dict(row))
+        with self.lock:
+            self._footprint_levels = clean[-5000:]
 
     def update_cas_orderbook(self, bids, asks, received_at=None):
         """Accept externally aggregated CAS depth; LTP ticks are not order-book depth."""
@@ -120,6 +130,7 @@ class AngelLiveFeed:
                 "current_forming_candle": self.candle_pipeline.forming_snapshot() if self.candle_pipeline else None,
                 "cas_reference": self.candle_pipeline.cas_reference_snapshot() if self.candle_pipeline else None,
                 "cas_orderbook": dict(self._cas_orderbook) if self._cas_orderbook else None,
+                "footprint": [dict(x) for x in self._footprint_levels],
                 "cas_iep": calculate_cas_iep_if_in_window(
                     (self._cas_orderbook or {}).get("bids"),
                     (self._cas_orderbook or {}).get("asks"),
